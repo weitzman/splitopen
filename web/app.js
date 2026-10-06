@@ -646,9 +646,10 @@ async function copyLink() {
   } catch (_) {
     ok = copyViaSelection(location.href);
   }
-  ui.link.textContent = ok ? 'Copied' : 'Copy failed';
+  ui.link.classList.toggle('copied', ok);
+  ui.link.classList.toggle('failed', !ok);
   clearTimeout(linkTimer);
-  linkTimer = setTimeout(() => { ui.link.textContent = 'Copy link'; }, 1500);
+  linkTimer = setTimeout(() => { ui.link.classList.remove('copied', 'failed'); }, 1500);
 }
 
 function renderHeader() {

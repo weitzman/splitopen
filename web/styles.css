@@ -285,12 +285,27 @@ h1 {
 .play.playing .icon-pause { display: block; }
 
 .time { font-variant-numeric: tabular-nums; color: var(--muted); font-size: 14px; min-width: 44px; text-align: center; }
-.seek { flex: 1; accent-color: var(--gold); cursor: pointer; }
-.btn.link { width: auto; min-width: 88px; padding: 0 12px; white-space: nowrap; flex-shrink: 0; }
-/* Small viewports: the link button takes its own row under the seek bar. */
+.seek { flex: 1; min-width: 0; accent-color: var(--gold); cursor: pointer; }
+/* Copy-link icon, in the style of GitHub's clipboard buttons: the copy glyph
+   gives way to a check for a moment after a copy, or turns red if it failed. */
+.btn.link {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+}
+.btn.link:hover { color: var(--text); }
+.btn.link svg { width: 16px; height: 16px; fill: currentColor; }
+.btn.link .icon-check { display: none; }
+.btn.link.copied { color: var(--gold); }
+.btn.link.copied .icon-copy { display: none; }
+.btn.link.copied .icon-check { display: block; }
+.btn.link.failed { color: var(--donut); }
 @media (max-width: 720px) {
-  .transport { flex-wrap: wrap; gap: 10px 12px; padding: 12px; }
-  .btn.link { flex-basis: 100%; height: 36px; }
+  .transport { gap: 10px 12px; padding: 12px; }
 }
 
 .help {
