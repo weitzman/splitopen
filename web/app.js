@@ -5,7 +5,7 @@
 // Fixed stem slots; who plays each one comes from bands.json per song.
 const SLOTS = [
   { id: 'guitar', file: 'guitar.mp3', color: 'var(--trey)' },
-  { id: 'bass',   file: 'bass.mp3',   color: 'var(--mike)', presence: true },
+  { id: 'bass',   file: 'bass.mp3',   color: 'var(--mike)' },
   { id: 'keys',   file: 'keys.mp3',   color: 'var(--page)' },
   { id: 'drums',  file: 'drums.mp3',  color: 'var(--fish)' },
   { id: 'vocals', file: 'vocals.mp3', color: 'var(--vox)' },
@@ -20,7 +20,7 @@ let songs = [];
 let bands = {};
 let song = null;
 let band = null;
-let channels = []; // { def, buffer, input, fader, muteGain, analyser, shelf?, source?, ui }
+let channels = []; // { def, buffer, fader, muteGain, analyser, source?, ui }
 let playing = false;
 let startedAt = 0;   // ctx.currentTime when playback started
 let offset = 0;      // position (s) at which playback started
@@ -75,23 +75,11 @@ function buildChannel(def, buffer) {
   analyser.fftSize = 1024;
   analyser.smoothingTimeConstant = 0.6;
 
-  let input = fader;
-  let shelf = null;
-  if (def.presence) {
-    // Synthesize some presence for the bass stem: the separation keeps the
-    // fundamentals but drops the attack/harmonics above ~1 kHz.
-    shelf = ctx.createBiquadFilter();
-    shelf.type = 'highshelf';
-    shelf.frequency.value = 900;
-    shelf.gain.value = 0;
-    shelf.connect(fader);
-    input = shelf;
-  }
   fader.connect(muteGain);
   muteGain.connect(analyser);
   analyser.connect(master);
 
-  return { def, buffer, input, fader, muteGain, analyser, shelf, source: null, mute: false, solo: false };
+  return { def, buffer, fader, muteGain, analyser, source: null, mute: false, solo: false };
 }
 
 function teardownChannels() {
@@ -125,7 +113,7 @@ function startSources(from) {
   for (const c of channels) {
     const src = ctx.createBufferSource();
     src.buffer = c.buffer;
-    src.connect(c.input);
+    src.connect(c.fader);
     src.start(t0, from);
     c.source = src;
   }
@@ -214,10 +202,6 @@ function buildStrip(c, index) {
       <button class="btn mute" title="Mute (shift+${index + 1})">M</button>
       <button class="btn solo" title="Solo (${index + 1})">S</button>
     </div>
-    ${c.def.presence ? `
-    <label class="presence">Presence
-      <input type="range" min="0" max="12" step="0.5" value="0" aria-label="Bass presence">
-    </label>` : ''}
   `;
   const fader = strip.querySelector('.fader');
   const mute = strip.querySelector('.mute');
@@ -229,13 +213,6 @@ function buildStrip(c, index) {
   });
   mute.addEventListener('click', () => { c.mute = !c.mute; applyMuteSolo(); });
   solo.addEventListener('click', () => { c.solo = !c.solo; applyMuteSolo(); });
-
-  if (c.shelf) {
-    const presence = strip.querySelector('.presence input');
-    presence.addEventListener('input', () => {
-      c.shelf.gain.setTargetAtTime(Number(presence.value), ctx.currentTime, 0.02);
-    });
-  }
 
   c.ui = { strip, mute, solo, meter };
   return strip;
