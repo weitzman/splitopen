@@ -6,7 +6,7 @@ A stem mixer for live recordings: each band member on a separate
 channel with mute, solo, and a fader, playing in sync.
 
 - `web/` — the player (static HTML + Web Audio API, no build step)
-- `audio/songs/<id>/` — five MP3 stems per song: guitar, bass, keys, drums, vocals
+- `audio/songs/<id>/` — five Opus stems per song (128 kbps, Ogg container): guitar, bass, keys, drums, vocals
 - `scripts/add-song.sh` — download a FLAC from archive.org, separate it with
   BS-Roformer-SW (`audio-separator`), encode the stems, register the song in
   `web/songs.json`
