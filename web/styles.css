@@ -52,6 +52,21 @@ body {
 }
 
 .show { text-align: center; padding-top: 12px; }
+.logo {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: -8px;
+  color: var(--text);
+  text-decoration: none;
+}
+.logo-mark { width: 44px; height: 28px; }
+.logo-text {
+  font-family: Righteous, Inter, sans-serif;
+  font-size: 20px;
+  letter-spacing: 0.04em;
+}
 .eyebrow {
   color: var(--gold);
   font-weight: 700;
