@@ -124,8 +124,7 @@ if old:
     entry['set'] = set_name or old.get('set', '')
     songs[songs.index(old)] = entry
 else:
-    songs.append(entry)
-songs.sort(key=lambda s: (s['date'], s['title']))
+    songs.append(entry)  # new songs go on the end of the picker
 json.dump(songs, open(path, 'w'), indent=2); open(path, 'a').write('\n')
 print(f"      {'updated' if old else 'added'} web/songs.json entry {id_}")
 PY
