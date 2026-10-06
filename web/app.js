@@ -180,11 +180,6 @@ function fmt(s) {
   return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
 }
 
-function fmtDate(iso) {
-  const [y, m, d] = iso.split('-').map(Number);
-  return new Date(y, m - 1, d).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
-}
-
 function buildStrip(c, index) {
   const strip = document.createElement('div');
   strip.className = 'strip';
@@ -273,10 +268,9 @@ function wireTransport() {
 }
 
 function renderHeader() {
-  document.getElementById('eyebrow').textContent = song.set ? `${band.name} · ${song.set}` : band.name;
+  document.getElementById('eyebrow').textContent = band.name;
   document.getElementById('title').textContent = song.title;
-  document.getElementById('venue').textContent =
-    `${song.venue} · ${song.city} · ${fmtDate(song.date)} · ${song.source}`;
+  document.getElementById('venue').textContent = `${song.venue} · ${song.city}`;
   document.title = `Split Open — ${song.title}`;
   for (const btn of document.querySelectorAll('.song')) {
     btn.classList.toggle('on', btn.dataset.id === song.id);
