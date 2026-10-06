@@ -3,30 +3,31 @@
 // so they stay sample-locked; mute/solo/fader are just gain changes.
 //
 // Switching songs is kept cheap three ways: the context runs at the stems'
-// native 44.1 kHz so decoding skips a resample, decoded songs stay in a
+// native 48 kHz so decoding skips a resample, decoded songs stay in a
 // memory-bounded cache, and the other songs are fetched (and, budget
 // permitting, decoded) in the background once the current one is ready.
 
 // Fixed stem slots; who plays each one comes from bands.json per song.
 const SLOTS = [
-  { id: 'guitar', file: 'guitar.mp3', color: 'var(--trey)' },
-  { id: 'bass',   file: 'bass.mp3',   color: 'var(--mike)' },
-  { id: 'keys',   file: 'keys.mp3',   color: 'var(--page)' },
-  { id: 'drums',  file: 'drums.mp3',  color: 'var(--fish)' },
-  { id: 'vocals', file: 'vocals.mp3', color: 'var(--vox)' },
+  { id: 'guitar', file: 'guitar.opus', color: 'var(--trey)' },
+  { id: 'bass',   file: 'bass.opus',   color: 'var(--mike)' },
+  { id: 'keys',   file: 'keys.opus',   color: 'var(--page)' },
+  { id: 'drums',  file: 'drums.opus',  color: 'var(--fish)' },
+  { id: 'vocals', file: 'vocals.opus', color: 'var(--vox)' },
 ];
 let STEMS = SLOTS;
 const STEM_FILES = SLOTS.map(s => s.file);
 
-// The stems are 44.1 kHz MP3s. Matching the context rate avoids resampling
-// every stem on decode, which is roughly 3x slower than decoding alone.
-const STEM_RATE = 44100;
+// The stems are Opus, which always decodes at 48 kHz. Matching the context
+// rate avoids resampling every stem on decode, which is roughly 3x slower
+// than decoding alone.
+const STEM_RATE = 48000;
 const ctx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: STEM_RATE });
 const master = ctx.createGain();
 master.connect(ctx.destination);
 
 // iOS Safari gives a tab on the order of 1 GB before killing it, and a single
-// 8-minute song decodes to ~850 MB of PCM. It also doesn't report
+// 8-minute song decodes to ~920 MB of PCM. It also doesn't report
 // deviceMemory. Treat touch devices that don't report memory as constrained:
 // no decoded-song cache, no background decoding, one stem decoded at a time,
 // and a real page reload on song switch so the old song's buffers are freed
@@ -101,7 +102,7 @@ async function fetchStem(url, onProgress, priority) {
   return bytes.buffer;
 }
 
-// Compressed stems, keyed by song id. ~10 MB per stem, so every song fits.
+// Compressed stems, keyed by song id. ~8 MB per stem, so every song fits.
 const byteCache = new Map();   // id -> Promise<ArrayBuffer[]>
 const bytesReady = new Set();  // ids whose fetch has finished
 
@@ -116,7 +117,7 @@ function fetchSongBytes(s, onProgress, priority = 'high') {
   return byteCache.get(s.id);
 }
 
-// Decoded stems: ~170 MB per stem for an 8-minute song, so the cache has a
+// Decoded stems: ~185 MB per stem for an 8-minute song, so the cache has a
 // byte budget of a quarter of device memory, capped at 2 GB. Browsers that
 // don't report memory (Safari) are assumed to be small. The song playing now
 // is always kept; beyond that, least recently used songs are dropped.
@@ -217,7 +218,7 @@ async function warmOtherSongs(current) {
 }
 
 // On constrained devices each stem is folded to mono right after decoding,
-// which halves what a song costs to keep around (~850 MB -> ~425 MB for an
+// which halves what a song costs to keep around (~920 MB -> ~460 MB for an
 // 8-minute song). The phone speaker is mono anyway; headphones lose the
 // stereo image of the separated stems, which is a fair trade for not crashing.
 function toMono(buf) {
@@ -232,10 +233,12 @@ function toMono(buf) {
   return mono;
 }
 
-// Rough decoded size from the compressed size: 192 kbps stereo MP3 at 44.1 kHz
-// expands by ~14.7x (16-bit PCM is 7.35x, Float32 doubles it).
+// Rough decoded size from the compressed size: 128 kbps stereo Opus decoded
+// to Float32 at 48 kHz expands by 24x (48000 * 2 ch * 4 bytes * 8 / 128000).
+// Opus is variable bit rate, so a mostly silent stem comes in well under
+// 128 kbps and this undershoots for it; the cache itself counts real sizes.
 function estimateDecodedBytes(arrayBuffer) {
-  return arrayBuffer.byteLength * 15;
+  return arrayBuffer.byteLength * 24;
 }
 
 // ---------- graph ----------
