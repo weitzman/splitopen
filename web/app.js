@@ -255,6 +255,7 @@ function buildChannel(def, buffer) {
 }
 
 function teardownChannels() {
+  clearSoloHint();
   stopSources();
   keepaliveStop();
   for (const c of channels) c.analyser.disconnect();
@@ -273,6 +274,61 @@ function applyMuteSolo() {
     c.ui.mute.classList.toggle('on', c.mute);
     c.ui.solo.classList.toggle('on', c.solo);
   }
+  updateHints();
+}
+
+// ---------- first-run hints ----------
+//
+// Nudge a new listener toward the two things worth discovering: while a song
+// is loaded but paused, Play pulses; while it plays with every channel
+// audible, one strip's S button glows for eight seconds, rests for eight, then
+// another strip takes a turn. Once they have pressed S or M even once, the
+// solo hint is retired for good (remembered in localStorage), since they've
+// found the buttons.
+
+const HINT_ON = 8000;
+const HINT_OFF = 8000;
+const MIX_USED_KEY = 'splitopen.mixUsed';
+let hintTimer = null;
+let hintIndex = -1;
+
+function mixUsed() {
+  try { return localStorage.getItem(MIX_USED_KEY) === '1'; } catch (_) { return false; }
+}
+
+function noteMixUsed() {
+  try { localStorage.setItem(MIX_USED_KEY, '1'); } catch (_) { /* private mode */ }
+  updateHints();
+}
+
+function clearSoloHint() {
+  clearTimeout(hintTimer);
+  hintTimer = null;
+  if (hintIndex >= 0 && channels[hintIndex]) channels[hintIndex].ui.solo.classList.remove('hint');
+  hintIndex = -1;
+}
+
+function advanceSoloHint() {
+  if (hintIndex >= 0 && channels[hintIndex]) channels[hintIndex].ui.solo.classList.remove('hint');
+  // Pick a strip other than the current one so the hint visibly moves.
+  let next = Math.floor(Math.random() * channels.length);
+  if (channels.length > 1 && next === hintIndex) next = (next + 1) % channels.length;
+  hintIndex = next;
+  channels[hintIndex].ui.solo.classList.add('hint');
+  hintTimer = setTimeout(() => {
+    channels[hintIndex].ui.solo.classList.remove('hint');
+    hintTimer = setTimeout(advanceSoloHint, HINT_OFF);
+  }, HINT_ON);
+}
+
+function updateHints() {
+  const loaded = channels.length > 0;
+  ui.play.classList.toggle('hint', loaded && !playing);
+
+  const mixing = channels.some(c => c.solo || c.mute);
+  const wantSolo = loaded && playing && !mixing && !mixUsed();
+  if (!wantSolo) clearSoloHint();
+  else if (hintTimer === null) advanceSoloHint();
 }
 
 // ---------- transport ----------
@@ -312,6 +368,7 @@ function stopSources() {
 function setPlayButton(on) {
   ui.play.classList.toggle('playing', on);
   ui.play.setAttribute('aria-label', on ? 'Pause' : 'Play');
+  updateHints();
 }
 
 async function play() {
@@ -388,8 +445,8 @@ function buildStrip(c, index) {
   fader.addEventListener('input', () => {
     c.fader.gain.setTargetAtTime(Number(fader.value), ctx.currentTime, 0.01);
   });
-  mute.addEventListener('click', () => { c.mute = !c.mute; applyMuteSolo(); });
-  solo.addEventListener('click', () => { c.solo = !c.solo; applyMuteSolo(); });
+  mute.addEventListener('click', () => { c.mute = !c.mute; noteMixUsed(); applyMuteSolo(); });
+  solo.addEventListener('click', () => { c.solo = !c.solo; noteMixUsed(); applyMuteSolo(); });
 
   c.ui = { strip, mute, solo, meter };
   return strip;
@@ -444,6 +501,7 @@ function wireTransport() {
     if (e.code.startsWith('Digit') && n >= 1 && n <= channels.length) {
       const c = channels[n - 1];
       if (e.shiftKey) c.mute = !c.mute; else c.solo = !c.solo;
+      noteMixUsed();
       applyMuteSolo();
     }
   });
