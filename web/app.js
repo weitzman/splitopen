@@ -37,7 +37,10 @@ const LOW_MEMORY = !navigator.deviceMemory && navigator.maxTouchPoints > 1;
 // ring/silent switch, so the graph runs but nothing comes out of the speaker.
 // Media elements use the "playback" session instead. On iOS 17+ we can ask for
 // that session directly; on older iOS, keeping a silent <audio> element playing
-// alongside the graph has the same effect.
+// alongside the graph has the same effect. The silent element also runs on
+// iOS 17+, because the lock-screen and headphone controls (see the media
+// session block below) only appear while a media element is playing; Web Audio
+// alone never counts as "Now Playing".
 if (navigator.audioSession) {
   try { navigator.audioSession.type = 'playback'; } catch (_) { /* unsupported value */ }
 }
@@ -56,7 +59,6 @@ function silentWavUrl() {
 
 let keepalive = null;
 function keepaliveStart() {
-  if (navigator.audioSession) return;
   if (!keepalive) {
     keepalive = new Audio(silentWavUrl());
     keepalive.loop = true;
@@ -369,6 +371,7 @@ function setPlayButton(on) {
   ui.play.classList.toggle('playing', on);
   ui.play.setAttribute('aria-label', on ? 'Pause' : 'Play');
   updateHints();
+  mediaSessionState(on);
 }
 
 async function play() {
@@ -403,6 +406,67 @@ function seek(to) {
   playing = false;
   offset = Math.max(0, Math.min(duration, to));
   if (wasPlaying) startSources(offset);
+  mediaSessionPosition();
+}
+
+// ---------- media session ----------
+// Lock-screen, media-hub, headphone and keyboard media-key controls. All of
+// these go through navigator.mediaSession, which browsers only surface while a
+// media element is playing; on iOS that is the keep-alive element above.
+
+function mediaSessionInstall() {
+  if (!('mediaSession' in navigator)) return;
+  const handlers = {
+    play: () => play(),
+    pause: () => pause(),
+    seekbackward: d => seek(position() - ((d && d.seekOffset) || 10)),
+    seekforward: d => seek(position() + ((d && d.seekOffset) || 10)),
+    seekto: d => { if (d && typeof d.seekTime === 'number') seek(d.seekTime); },
+    previoustrack: () => mediaSessionStep(-1),
+    nexttrack: () => mediaSessionStep(1),
+  };
+  for (const [action, fn] of Object.entries(handlers)) {
+    try { navigator.mediaSession.setActionHandler(action, fn); } catch (_) { /* action unsupported */ }
+  }
+}
+
+// Wraps around the song list, the same way the sidebar switches songs.
+function mediaSessionStep(dir) {
+  if (!song || !songs.length) return;
+  const i = songs.findIndex(s => s.id === song.id);
+  location.hash = songs[(i + dir + songs.length) % songs.length].id;
+}
+
+function mediaSessionMetadata() {
+  if (!('mediaSession' in navigator) || !song) return;
+  try {
+    navigator.mediaSession.metadata = new MediaMetadata({
+      title: song.title,
+      artist: band.name,
+      album: `${song.date} · ${song.venue}`,
+      artwork: [{ src: new URL('apple-touch-icon.png', location.href).href, sizes: '180x180', type: 'image/png' }],
+    });
+  } catch (_) { /* MediaMetadata unavailable */ }
+}
+
+function mediaSessionState(on) {
+  if (!('mediaSession' in navigator)) return;
+  navigator.mediaSession.playbackState = on ? 'playing' : 'paused';
+  mediaSessionPosition();
+}
+
+// Keeps the lock-screen scrubber accurate. Called on play, pause, seek and
+// song load; the browser extrapolates between calls, so not every frame.
+function mediaSessionPosition() {
+  if (!('mediaSession' in navigator) || !navigator.mediaSession.setPositionState) return;
+  if (!channels.length || !(duration > 0)) return;
+  try {
+    navigator.mediaSession.setPositionState({
+      duration,
+      position: Math.max(0, Math.min(duration, position())),
+      playbackRate: 1,
+    });
+  } catch (_) { /* position outside duration */ }
 }
 
 // ---------- UI ----------
@@ -510,6 +574,7 @@ function renderHeader() {
   for (const btn of document.querySelectorAll('.song')) {
     btn.classList.toggle('on', btn.dataset.id === song.id);
   }
+  mediaSessionMetadata();
 }
 
 function renderSongList() {
@@ -563,6 +628,7 @@ async function loadSong(id) {
     });
     ui.dur.textContent = fmt(duration);
     ui.seek.value = 0;
+    mediaSessionPosition();
     loading.hidden = true;
     mixer.hidden = false;
     document.getElementById('transport').hidden = false;
@@ -579,6 +645,7 @@ async function loadSong(id) {
 
 (async () => {
   wireTransport();
+  mediaSessionInstall();
   tick();
   try {
     [songs, bands] = await Promise.all([
