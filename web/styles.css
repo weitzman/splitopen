@@ -26,19 +26,16 @@ body {
   overflow-x: hidden;
 }
 
-/* Fishman-dress style donut field */
-.donuts {
+/* Backdrop: the Fishman-dress donut field, each ring in one of the five stem colors
+   with a faint outer halo, at uniform strength. The tile holds one ring per color
+   (320px = 5 x 64px). */
+.backdrop {
   position: fixed;
   inset: 0;
   z-index: 0;
   pointer-events: none;
-  opacity: 0.12;
-  background-image:
-    radial-gradient(circle at 50% 50%, transparent 9px, var(--donut) 10px, var(--donut) 16px, transparent 17px);
-  background-size: 64px 64px;
-  background-position: 0 0;
-  mask-image: linear-gradient(to bottom, rgba(0,0,0,0.9), rgba(0,0,0,0.25) 60%, transparent);
-  -webkit-mask-image: linear-gradient(to bottom, rgba(0,0,0,0.9), rgba(0,0,0,0.25) 60%, transparent);
+  opacity: 0.09;
+  background: url(bg-rings.svg) 0 0 / 320px 64px repeat;
 }
 
 .app {
