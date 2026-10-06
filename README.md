@@ -1,6 +1,6 @@
 # Split Open
 
-Web site: https://weitzman.github.io/stemmy/
+Web site: https://weitzman.github.io/splitopen
 
 A stem mixer for live recordings: each band member on a separate
 channel with mute, solo, and a fader, playing in sync.
