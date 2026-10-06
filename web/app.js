@@ -1,6 +1,11 @@
 // Split Open — multi-stem player built on the Web Audio API.
 // All stems are decoded up front and started on the same AudioContext clock,
 // so they stay sample-locked; mute/solo/fader are just gain changes.
+//
+// Switching songs is kept cheap three ways: the context runs at the stems'
+// native 44.1 kHz so decoding skips a resample, decoded songs stay in a
+// memory-bounded cache, and the other songs are fetched (and, budget
+// permitting, decoded) in the background once the current one is ready.
 
 // Fixed stem slots; who plays each one comes from bands.json per song.
 const SLOTS = [
@@ -11,10 +16,57 @@ const SLOTS = [
   { id: 'vocals', file: 'vocals.mp3', color: 'var(--vox)' },
 ];
 let STEMS = SLOTS;
+const STEM_FILES = SLOTS.map(s => s.file);
 
-const ctx = new (window.AudioContext || window.webkitAudioContext)();
+// The stems are 44.1 kHz MP3s. Matching the context rate avoids resampling
+// every stem on decode, which is roughly 3x slower than decoding alone.
+const STEM_RATE = 44100;
+const ctx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: STEM_RATE });
 const master = ctx.createGain();
 master.connect(ctx.destination);
+
+// iOS Safari gives a tab on the order of 1 GB before killing it, and a single
+// 8-minute song decodes to ~850 MB of PCM. It also doesn't report
+// deviceMemory. Treat touch devices that don't report memory as constrained:
+// no decoded-song cache, no background decoding, one stem decoded at a time,
+// and a real page reload on song switch so the old song's buffers are freed
+// before the new one is decoded (GC timing is otherwise not ours to control).
+const LOW_MEMORY = !navigator.deviceMemory && navigator.maxTouchPoints > 1;
+
+// iOS routes Web Audio through the "ambient" audio session, which obeys the
+// ring/silent switch, so the graph runs but nothing comes out of the speaker.
+// Media elements use the "playback" session instead. On iOS 17+ we can ask for
+// that session directly; on older iOS, keeping a silent <audio> element playing
+// alongside the graph has the same effect.
+if (navigator.audioSession) {
+  try { navigator.audioSession.type = 'playback'; } catch (_) { /* unsupported value */ }
+}
+
+function silentWavUrl() {
+  const rate = 8000, frames = rate / 2; // half a second of silence
+  const buf = new ArrayBuffer(44 + frames * 2);
+  const v = new DataView(buf);
+  const str = (o, t) => { for (let i = 0; i < t.length; i++) v.setUint8(o + i, t.charCodeAt(i)); };
+  str(0, 'RIFF'); v.setUint32(4, 36 + frames * 2, true); str(8, 'WAVE');
+  str(12, 'fmt '); v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+  v.setUint32(24, rate, true); v.setUint32(28, rate * 2, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true);
+  str(36, 'data'); v.setUint32(40, frames * 2, true);
+  return URL.createObjectURL(new Blob([buf], { type: 'audio/wav' }));
+}
+
+let keepalive = null;
+function keepaliveStart() {
+  if (navigator.audioSession) return;
+  if (!keepalive) {
+    keepalive = new Audio(silentWavUrl());
+    keepalive.loop = true;
+    keepalive.setAttribute('playsinline', '');
+  }
+  keepalive.play().catch(() => { /* not allowed outside a gesture; harmless */ });
+}
+function keepaliveStop() {
+  if (keepalive) keepalive.pause();
+}
 
 let songs = [];
 let bands = {};
@@ -29,8 +81,8 @@ let loadToken = 0;   // guards against a stale load finishing after a song switc
 
 // ---------- loading ----------
 
-async function loadStem(url, onProgress) {
-  const res = await fetch(url);
+async function fetchStem(url, onProgress, priority) {
+  const res = await fetch(url, { priority });
   if (!res.ok) throw new Error(`${res.status} ${url}`);
   const total = Number(res.headers.get('content-length')) || 0;
   const reader = res.body.getReader();
@@ -41,29 +93,149 @@ async function loadStem(url, onProgress) {
     if (done) break;
     chunks.push(value);
     received += value.length;
-    onProgress(total ? received / total : 0);
+    if (onProgress) onProgress(total ? received / total : 0);
   }
   const bytes = new Uint8Array(received);
   let pos = 0;
   for (const c of chunks) { bytes.set(c, pos); pos += c.length; }
-  return ctx.decodeAudioData(bytes.buffer);
+  return bytes.buffer;
 }
 
-async function loadAllStems(dir) {
+// Compressed stems, keyed by song id. ~10 MB per stem, so every song fits.
+const byteCache = new Map();   // id -> Promise<ArrayBuffer[]>
+const bytesReady = new Set();  // ids whose fetch has finished
+
+function fetchSongBytes(s, onProgress, priority = 'high') {
+  if (!byteCache.has(s.id)) {
+    const p = Promise.all(STEM_FILES.map((file, i) =>
+      fetchStem(s.dir + file, onProgress && (f => onProgress(i, f)), priority)
+    ));
+    p.then(() => bytesReady.add(s.id), () => byteCache.delete(s.id));
+    byteCache.set(s.id, p);
+  }
+  return byteCache.get(s.id);
+}
+
+// Decoded stems: ~170 MB per stem for an 8-minute song, so the cache has a
+// byte budget of a quarter of device memory, capped at 2 GB. Browsers that
+// don't report memory (Safari) are assumed to be small. The song playing now
+// is always kept; beyond that, least recently used songs are dropped.
+const decodedCache = new Map(); // id -> Promise<AudioBuffer[]>; insertion order = LRU
+const decodedBytes = new Map(); // id -> bytes once decoded
+const DECODE_BUDGET = LOW_MEMORY ? 0 : Math.min(2048, (navigator.deviceMemory || 2) * 256) * 1024 * 1024;
+
+function bufferBytes(buffers) {
+  return buffers.reduce((n, b) => n + b.length * b.numberOfChannels * 4, 0);
+}
+
+function cachedBytesTotal() {
+  let n = 0;
+  for (const v of decodedBytes.values()) n += v;
+  return n;
+}
+
+function touchDecoded(id) {
+  const p = decodedCache.get(id);
+  decodedCache.delete(id);
+  decodedCache.set(id, p);
+}
+
+function evictDecoded(keepId) {
+  for (const id of decodedCache.keys()) {
+    if (cachedBytesTotal() <= DECODE_BUDGET) return;
+    if (id === keepId || (song && id === song.id) || !decodedBytes.has(id)) continue;
+    decodedCache.delete(id);
+    decodedBytes.delete(id);
+  }
+}
+
+function decodeSong(s, onProgress, priority) {
+  if (decodedCache.has(s.id)) {
+    touchDecoded(s.id);
+    return decodedCache.get(s.id);
+  }
+  const p = (async () => {
+    const bytes = await fetchSongBytes(s, onProgress, priority);
+    // decodeAudioData detaches its input, so decode a copy and keep the bytes.
+    // Parallel decoding is faster where there's a thread pool (Chrome), but
+    // on a phone five decoders' scratch space at once is what tips it over.
+    let buffers;
+    if (LOW_MEMORY) {
+      buffers = [];
+      for (const b of bytes) buffers.push(toMono(await ctx.decodeAudioData(b.slice(0))));
+    } else {
+      buffers = await Promise.all(bytes.map(b => ctx.decodeAudioData(b.slice(0))));
+    }
+    decodedBytes.set(s.id, bufferBytes(buffers));
+    evictDecoded(s.id);
+    return buffers;
+  })();
+  p.catch(() => { decodedCache.delete(s.id); decodedBytes.delete(s.id); });
+  decodedCache.set(s.id, p);
+  return p;
+}
+
+async function loadAllStems(s) {
   const fill = document.getElementById('loading-fill');
   const label = document.getElementById('loading-label');
-  label.textContent = 'Loading stems…';
-  fill.style.width = '0%';
-  const progress = new Array(STEMS.length).fill(0);
-  const update = () => {
-    const pct = progress.reduce((a, b) => a + b, 0) / STEMS.length * 100;
+  const haveBytes = bytesReady.has(s.id);
+  label.textContent = haveBytes ? 'Decoding…' : 'Loading stems…';
+  fill.style.width = haveBytes ? '100%' : '0%';
+  const progress = new Array(STEM_FILES.length).fill(0);
+  const buffers = await decodeSong(s, (i, f) => {
+    progress[i] = f;
+    const pct = progress.reduce((a, b) => a + b, 0) / progress.length * 100;
     fill.style.width = pct.toFixed(1) + '%';
-  };
-  const buffers = await Promise.all(STEMS.map((def, i) =>
-    loadStem(dir + def.file, p => { progress[i] = p; update(); })
-  ));
-  label.textContent = 'Decoding…';
+    if (pct >= 100) label.textContent = 'Decoding…';
+  });
   return buffers;
+}
+
+// Warm the other songs in the background: fetch bytes for all of them, and
+// pre-decode as many as the memory budget allows, nearest in the list first.
+let warmToken = 0;
+async function warmOtherSongs(current) {
+  const token = ++warmToken;
+  if (LOW_MEMORY) return;
+  if (navigator.connection && navigator.connection.saveData) return;
+  const i = songs.findIndex(s => s.id === current.id);
+  const order = [];
+  for (let d = 1; d < songs.length; d++) {
+    order.push(songs[(i + d) % songs.length]);
+  }
+  for (const s of order) {
+    if (token !== warmToken) return;
+    try {
+      const bytes = await fetchSongBytes(s, null, 'low');
+      if (token !== warmToken) return;
+      const est = bytes.reduce((n, b) => n + estimateDecodedBytes(b), 0);
+      if (cachedBytesTotal() + est <= DECODE_BUDGET) await decodeSong(s, null, 'low');
+    } catch (err) {
+      console.warn('warm failed', s.id, err);
+    }
+  }
+}
+
+// On constrained devices each stem is folded to mono right after decoding,
+// which halves what a song costs to keep around (~850 MB -> ~425 MB for an
+// 8-minute song). The phone speaker is mono anyway; headphones lose the
+// stereo image of the separated stems, which is a fair trade for not crashing.
+function toMono(buf) {
+  const n = buf.numberOfChannels;
+  if (n === 1) return buf;
+  const mono = ctx.createBuffer(1, buf.length, buf.sampleRate);
+  const out = mono.getChannelData(0);
+  for (let ch = 0; ch < n; ch++) {
+    const src = buf.getChannelData(ch);
+    for (let i = 0; i < out.length; i++) out[i] += src[i] / n;
+  }
+  return mono;
+}
+
+// Rough decoded size from the compressed size: 192 kbps stereo MP3 at 44.1 kHz
+// expands by ~14.7x (16-bit PCM is 7.35x, Float32 doubles it).
+function estimateDecodedBytes(arrayBuffer) {
+  return arrayBuffer.byteLength * 15;
 }
 
 // ---------- graph ----------
@@ -96,6 +268,7 @@ function buildChannel(def, buffer) {
 
 function teardownChannels() {
   stopSources();
+  keepaliveStop();
   for (const c of channels) c.analyser.disconnect();
   channels = [];
   playing = false;
@@ -155,7 +328,9 @@ function setPlayButton(on) {
 
 async function play() {
   if (!channels.length) return;
-  if (ctx.state === 'suspended') await ctx.resume();
+  keepaliveStart(); // must be called synchronously inside the user gesture
+  // Safari also reports 'interrupted' (phone call, backgrounding); resume covers both.
+  if (ctx.state !== 'running') await ctx.resume();
   if (offset >= duration) offset = 0;
   startSources(offset);
   setPlayButton(true);
@@ -165,6 +340,7 @@ function pause() {
   offset = position();
   stopSources();
   playing = false;
+  keepaliveStop();
   setPlayButton(false);
 }
 
@@ -172,6 +348,7 @@ function stop(at) {
   stopSources();
   playing = false;
   offset = at;
+  keepaliveStop();
   setPlayButton(false);
 }
 
@@ -347,7 +524,7 @@ async function loadSong(id) {
   loading.hidden = false;
 
   try {
-    const buffers = await loadAllStems(song.dir);
+    const buffers = await loadAllStems(song);
     if (token !== loadToken) return; // user switched songs mid-load
     duration = Math.max(...buffers.map(b => b.duration));
     buffers.forEach((buf, i) => {
@@ -361,6 +538,7 @@ async function loadSong(id) {
     mixer.hidden = false;
     document.getElementById('transport').hidden = false;
     applyMuteSolo();
+    warmOtherSongs(song);
   } catch (err) {
     if (token !== loadToken) return;
     document.getElementById('loading-label').textContent = 'Failed to load stems: ' + err.message;
@@ -384,6 +562,18 @@ async function loadSong(id) {
   }
   renderSongList();
   const fromHash = () => loadSong(decodeURIComponent(location.hash.slice(1)));
-  window.addEventListener('hashchange', fromHash);
+  window.addEventListener('hashchange', () => {
+    if (!(LOW_MEMORY && song)) return fromHash();
+    // Drop every reference to the old song's PCM before the reload. Safari
+    // keeps the same process across a reload and collects the old page's
+    // heap lazily, so the less we leave behind the better.
+    teardownChannels();
+    decodedCache.clear();
+    decodedBytes.clear();
+    byteCache.clear();
+    bytesReady.clear();
+    ctx.close().catch(() => {});
+    location.reload();
+  });
   fromHash();
 })();
