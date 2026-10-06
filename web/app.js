@@ -465,7 +465,7 @@ function tick() {
       // ~ -40 dB floor to 0 dB ceiling, mapped to 0..100%
       const db = 20 * Math.log10(rms || 1e-5);
       const pct = Math.max(0, Math.min(100, (db + 40) / 40 * 100));
-      c.ui.meter.style.height = pct.toFixed(1) + '%';
+      c.ui.meter.style.setProperty('--lvl', pct.toFixed(1) + '%');
     }
   }
   requestAnimationFrame(tick);
