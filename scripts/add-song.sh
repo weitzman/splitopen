@@ -1,0 +1,124 @@
+#!/usr/bin/env bash
+# Add a song to the Stemmy player from an archive.org FLAC URL.
+#
+#   scripts/add-song.sh <archive.org flac url> [--title "Song"] [--set "Set II"] [--source "Soundboard"]
+#
+# Steps: download FLAC -> BS-Roformer-SW separation -> encode five MP3 stems
+# (piano+other merged into keys) -> add/replace the entry in web/songs.json.
+# Each step is skipped when its output already exists, so re-running is cheap.
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+MODEL="BS-Roformer-SW.ckpt"
+BITRATE="192k"
+
+url="${1:-}"; shift || true
+[[ -n "$url" ]] || { sed -n '2,9p' "$0" | sed 's/^# \{0,1\}//'; exit 1; }
+
+title=""; set_name=""; source_name="Soundboard"
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --title)  title="$2";       shift 2 ;;
+    --set)    set_name="$2";    shift 2 ;;
+    --source) source_name="$2"; shift 2 ;;
+    *) echo "unknown option: $1" >&2; exit 1 ;;
+  esac
+done
+
+for cmd in curl ffmpeg audio-separator python3; do
+  command -v "$cmd" >/dev/null || { echo "missing: $cmd" >&2; exit 1; }
+done
+
+# URL forms: https://<host>/0/items/<item>/<file>  or  https://archive.org/download/<item>/<file>
+item="$(python3 - "$url" <<'PY'
+import re, sys
+m = re.search(r'/(?:items|download)/([^/]+)/', sys.argv[1])
+print(m.group(1) if m else '')
+PY
+)"
+fname="$(python3 -c 'import sys, urllib.parse; print(urllib.parse.unquote(sys.argv[1].rsplit("/",1)[-1]))' "$url")"
+[[ -n "$item" && "$fname" == *.flac ]] || { echo "can't parse item/filename from url: $url" >&2; exit 1; }
+
+src_dir="$ROOT/audio/src/$item"
+sep_dir="$ROOT/audio/stems/$item"
+src="$src_dir/$fname"
+base="${fname%.flac}"
+
+# --- 1. download --------------------------------------------------------
+mkdir -p "$src_dir"
+if [[ -s "$src" ]]; then
+  echo "[1/4] already downloaded: $src"
+else
+  echo "[1/4] downloading $fname"
+  curl -fL --progress-bar -o "$src.part" "$url" && mv "$src.part" "$src"
+fi
+
+# --- 2. metadata --------------------------------------------------------
+echo "[2/4] fetching metadata for $item"
+curl -fsL "https://archive.org/metadata/$item" -o "$src_dir/metadata.json"
+meta="$(python3 - "$src_dir/metadata.json" "$fname" "$title" <<'PY'
+import json, re, sys
+d = json.load(open(sys.argv[1])); m = d.get('metadata', {}); fname, title = sys.argv[2], sys.argv[3]
+f = next((f for f in d.get('files', []) if f.get('name') == fname), {})
+if not title:
+    title = f.get('title') or re.sub(r'^\s*(d\d+)?t?\d+[\s._-]+', '', fname[:-5]).strip() or fname[:-5]
+title = re.sub(r'\s*(->|>)\s*$', '', title).strip()  # drop trailing segue marker
+date = (m.get('date') or '')[:10]
+venue = m.get('venue') or ''; city = m.get('coverage') or ''
+t = m.get('title') or ''
+if not (venue and city):
+    mm = re.match(r'.*?\d{4}-\d{2}-\d{2}\s*-\s*(.+?)\s*-\s*(.+)$', t) or re.match(r'.*Live at (.+?), (.+?) on \d{4}', t)
+    if mm: venue, city = venue or mm.group(1), city or mm.group(2)
+venue = re.sub(r'^the\s+', '', venue, flags=re.I)
+print(json.dumps({'title': title, 'date': date, 'venue': venue, 'city': city}))
+PY
+)"
+title="$(python3 -c 'import json,sys; print(json.loads(sys.argv[1])["title"])' "$meta")"
+date="$(python3 -c 'import json,sys; print(json.loads(sys.argv[1])["date"])' "$meta")"
+slug="$(python3 -c 'import re,sys; print(re.sub(r"[^a-z0-9]+","-",sys.argv[1].lower()).strip("-"))' "$title")"
+id="${date}-${slug}"
+out="$ROOT/audio/songs/$id"
+echo "      $title — $date  ->  audio/songs/$id"
+
+# --- 3. separate --------------------------------------------------------
+stem() { printf '%s/%s_(%s)_%s.wav' "$sep_dir" "$base" "$1" "${MODEL%.ckpt}"; }
+if [[ -s "$(stem bass)" && -s "$(stem other)" ]]; then
+  echo "[3/4] already separated: $sep_dir"
+else
+  echo "[3/4] separating with $MODEL (several minutes on CPU)"
+  mkdir -p "$sep_dir"
+  audio-separator -m "$MODEL" --output_dir "$sep_dir" --output_format WAV "$src"
+fi
+
+# --- 4. encode + register -----------------------------------------------
+echo "[4/4] encoding stems"
+mkdir -p "$out"
+for s in drums bass vocals guitar; do
+  ffmpeg -hide_banner -loglevel error -y -i "$(stem $s)" -b:a "$BITRATE" "$out/$s.mp3"
+done
+ffmpeg -hide_banner -loglevel error -y -i "$(stem piano)" -i "$(stem other)" \
+  -filter_complex "amix=inputs=2:normalize=0" -b:a "$BITRATE" "$out/keys.mp3"
+
+python3 - "$ROOT/web/songs.json" "$meta" "$id" "$set_name" "$source_name" <<'PY'
+import json, sys
+path, meta, id_, set_name, source = sys.argv[1:]
+meta = json.loads(meta)
+entry = {'id': id_, 'title': meta['title'], 'date': meta['date'], 'set': set_name,
+         'venue': meta['venue'], 'city': meta['city'], 'source': source,
+         'dir': f'../audio/songs/{id_}/'}
+try:
+    songs = json.load(open(path))
+except FileNotFoundError:
+    songs = []
+old = next((s for s in songs if s['id'] == id_), None)
+if old:
+    entry['set'] = set_name or old.get('set', '')
+    songs[songs.index(old)] = entry
+else:
+    songs.append(entry)
+songs.sort(key=lambda s: (s['date'], s['title']))
+json.dump(songs, open(path, 'w'), indent=2); open(path, 'a').write('\n')
+print(f"      {'updated' if old else 'added'} web/songs.json entry {id_}")
+PY
+
+echo "done: open the player and pick \"$title\" (hash #$id)"
