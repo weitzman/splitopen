@@ -505,7 +505,7 @@ function wireTransport() {
 function renderHeader() {
   document.getElementById('eyebrow').textContent = band.name;
   document.getElementById('title').textContent = song.title;
-  document.getElementById('venue').textContent = `${song.venue} · ${song.city}`;
+  document.getElementById('venue').textContent = `${song.date} · ${song.venue} · ${song.city}`;
   document.title = `Split Open — ${song.title}`;
   for (const btn of document.querySelectorAll('.song')) {
     btn.classList.toggle('on', btn.dataset.id === song.id);
@@ -520,7 +520,7 @@ function renderSongList() {
     btn.className = 'song';
     btn.dataset.id = s.id;
     const who = (bands[s.band] || {}).name || s.band;
-    btn.innerHTML = `${s.title}<small>${who} · ${s.date}</small>`;
+    btn.innerHTML = `${s.title}<small>${who}</small>`;
     btn.addEventListener('click', () => { location.hash = s.id; });
     nav.appendChild(btn);
   }
