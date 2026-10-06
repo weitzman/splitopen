@@ -1,21 +1,25 @@
-// Stemmy — multi-stem player built on the Web Audio API.
+// Split Open — multi-stem player built on the Web Audio API.
 // All stems are decoded up front and started on the same AudioContext clock,
 // so they stay sample-locked; mute/solo/fader are just gain changes.
 
-const STEMS = [
-  { id: 'guitar', who: 'Trey',   inst: 'Guitar', file: 'guitar.mp3', color: 'var(--trey)' },
-  { id: 'bass',   who: 'Mike',   inst: 'Bass',   file: 'bass.mp3',   color: 'var(--mike)', presence: true },
-  { id: 'keys',   who: 'Page',   inst: 'Keys',   file: 'keys.mp3',   color: 'var(--page)' },
-  { id: 'drums',  who: 'Fish',   inst: 'Drums',  file: 'drums.mp3',  color: 'var(--fish)' },
-  { id: 'vocals', who: 'Vocals', inst: 'Mics',   file: 'vocals.mp3', color: 'var(--vox)' },
+// Fixed stem slots; who plays each one comes from bands.json per song.
+const SLOTS = [
+  { id: 'guitar', file: 'guitar.mp3', color: 'var(--trey)' },
+  { id: 'bass',   file: 'bass.mp3',   color: 'var(--mike)', presence: true },
+  { id: 'keys',   file: 'keys.mp3',   color: 'var(--page)' },
+  { id: 'drums',  file: 'drums.mp3',  color: 'var(--fish)' },
+  { id: 'vocals', file: 'vocals.mp3', color: 'var(--vox)' },
 ];
+let STEMS = SLOTS;
 
 const ctx = new (window.AudioContext || window.webkitAudioContext)();
 const master = ctx.createGain();
 master.connect(ctx.destination);
 
 let songs = [];
+let bands = {};
 let song = null;
+let band = null;
 let channels = []; // { def, buffer, input, fader, muteGain, analyser, shelf?, source?, ui }
 let playing = false;
 let startedAt = 0;   // ctx.currentTime when playback started
@@ -292,11 +296,11 @@ function wireTransport() {
 }
 
 function renderHeader() {
-  document.getElementById('eyebrow').textContent = song.set ? `Phish · ${song.set}` : 'Phish';
+  document.getElementById('eyebrow').textContent = song.set ? `${band.name} · ${song.set}` : band.name;
   document.getElementById('title').textContent = song.title;
   document.getElementById('venue').textContent =
     `${song.venue} · ${song.city} · ${fmtDate(song.date)} · ${song.source}`;
-  document.title = `Stemmy — ${song.title}`;
+  document.title = `Split Open — ${song.title}`;
   for (const btn of document.querySelectorAll('.song')) {
     btn.classList.toggle('on', btn.dataset.id === song.id);
   }
@@ -309,7 +313,8 @@ function renderSongList() {
     const btn = document.createElement('button');
     btn.className = 'song';
     btn.dataset.id = s.id;
-    btn.innerHTML = `${s.title}<small>${s.date}</small>`;
+    const who = (bands[s.band] || {}).name || s.band;
+    btn.innerHTML = `${s.title}<small>${who} · ${s.date}</small>`;
     btn.addEventListener('click', () => { location.hash = s.id; });
     nav.appendChild(btn);
   }
@@ -324,6 +329,8 @@ async function loadSong(id) {
 
   teardownChannels();
   song = next;
+  band = bands[song.band] || bands.phish || { name: song.band, channels: {} };
+  STEMS = SLOTS.map(slot => ({ ...slot, who: slot.id, inst: '', ...(band.channels[slot.id] || {}) }));
   renderHeader();
   setPlayButton(false);
 
@@ -362,7 +369,10 @@ async function loadSong(id) {
   wireTransport();
   tick();
   try {
-    songs = await (await fetch('songs.json')).json();
+    [songs, bands] = await Promise.all([
+      fetch('songs.json', { cache: 'no-cache' }).then(r => r.json()),
+      fetch('bands.json', { cache: 'no-cache' }).then(r => r.json()),
+    ]);
   } catch (err) {
     document.getElementById('loading-label').textContent = 'Failed to load song list: ' + err.message;
     return;

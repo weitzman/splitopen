@@ -1,6 +1,7 @@
 [
   {
     "id": "1993-03-22-mikes-song",
+    "band": "phish",
     "title": "Mike's Song",
     "date": "1993-03-22",
     "set": "Set II",
@@ -11,6 +12,7 @@
   },
   {
     "id": "1998-07-26-funky-bitch",
+    "band": "phish",
     "title": "Funky Bitch",
     "date": "1998-07-26",
     "set": "Set I",
