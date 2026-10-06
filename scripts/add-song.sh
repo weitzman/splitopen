@@ -6,14 +6,22 @@
 # The band defaults to the item's creator; its channel layout (who plays what)
 # must exist in web/bands.json under the slugified band name.
 #
-# Steps: download FLAC -> BS-Roformer-SW separation -> encode five MP3 stems
+# Steps: download FLAC -> BS-Roformer-SW separation -> encode five Opus stems
 # (piano+other merged into keys) -> add/replace the entry in web/songs.json.
 # Each step is skipped when its output already exists, so re-running is cheap.
+#
+# Stems are Opus in an Ogg container (.opus). Safari used to accept Opus only
+# inside CAF, so a 10 s clip was encoded both ways and fed to decodeAudioData
+# on 2026-10-06: Ogg Opus decoded in Safari 27, Firefox 157, Chrome 154, and
+# Chromium 152; CAF Opus decoded only in Safari. ffmpeg's CAF muxer cannot
+# write Opus anyway (afconvert can). The player then loaded and played the
+# Ogg Opus stems on iPhone Safari over the LAN. AAC in M4A decoded everywhere
+# too, but Safari padded it to 10.008 s where Opus came back exactly 10.000 s.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 MODEL="BS-Roformer-SW.ckpt"
-BITRATE="192k"
+BITRATE="128k"
 
 url="${1:-}"; shift || true
 [[ -n "$url" ]] || { sed -n '2,12p' "$0" | sed 's/^# \{0,1\}//'; exit 1; }
@@ -100,13 +108,19 @@ else
 fi
 
 # --- 4. encode + register -----------------------------------------------
-echo "[4/4] encoding stems"
-mkdir -p "$out"
-for s in drums bass vocals guitar; do
-  ffmpeg -hide_banner -loglevel error -y -i "$(stem $s)" -b:a "$BITRATE" "$out/$s.mp3"
-done
-ffmpeg -hide_banner -loglevel error -y -i "$(stem piano)" -i "$(stem other)" \
-  -filter_complex "amix=inputs=2:normalize=0" -b:a "$BITRATE" "$out/keys.mp3"
+encoded=1
+for s in drums bass vocals guitar keys; do [[ -s "$out/$s.opus" ]] || encoded=0; done
+if [[ $encoded == 1 ]]; then
+  echo "[4/4] already encoded: $out"
+else
+  echo "[4/4] encoding stems"
+  mkdir -p "$out"
+  for s in drums bass vocals guitar; do
+    ffmpeg -hide_banner -loglevel error -y -i "$(stem $s)" -c:a libopus -b:a "$BITRATE" "$out/$s.opus"
+  done
+  ffmpeg -hide_banner -loglevel error -y -i "$(stem piano)" -i "$(stem other)" \
+    -filter_complex "amix=inputs=2:normalize=0" -c:a libopus -b:a "$BITRATE" "$out/keys.opus"
+fi
 
 python3 - "$ROOT/web/songs.json" "$meta" "$id" "$set_name" "$source_name" <<'PY'
 import json, sys
