@@ -405,6 +405,18 @@ function seek(to) {
   if (wasPlaying) startSources(offset);
 }
 
+// Left and Right arrows step the playhead 5 s either way, through seek() so
+// the play state is kept. preventDefault stops a focused fader or the seek
+// bar from stepping as well.
+function wireNudgeKeys() {
+  document.addEventListener('keydown', e => {
+    if (!channels.length || e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return;
+    if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+    e.preventDefault();
+    seek(position() + (e.key === 'ArrowLeft' ? -5 : 5));
+  });
+}
+
 // ---------- UI ----------
 
 const ui = {};
@@ -486,6 +498,7 @@ function wireTransport() {
     ui.seeking = false;
     seek(ui.seek.value / 1000 * duration);
   });
+  wireNudgeKeys();
 
   document.addEventListener('keydown', e => {
     if (e.target.tagName === 'INPUT') e.target.blur();
