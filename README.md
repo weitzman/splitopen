@@ -1,6 +1,6 @@
 # Stemmy
 
-A stem mixer for live Phish recordings: each band member on a separate
+A stem mixer for live recordings: each band member on a separate
 channel with mute, solo, and a fader, playing in sync.
 
 - `web/` — the player (static HTML + Web Audio API, no build step)
