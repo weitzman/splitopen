@@ -1,0 +1,22 @@
+[
+  {
+    "id": "1993-03-22-mikes-song",
+    "title": "Mike's Song",
+    "date": "1993-03-22",
+    "set": "Set II",
+    "venue": "Crest Theater",
+    "city": "Sacramento, CA",
+    "source": "Soundboard",
+    "dir": "../audio/songs/1993-03-22-mikes-song/"
+  },
+  {
+    "id": "1998-07-26-funky-bitch",
+    "title": "Funky Bitch",
+    "date": "1998-07-26",
+    "set": "Set I",
+    "venue": "Coca-Cola Starplex Amphitheater",
+    "city": "Dallas, TX",
+    "source": "Soundboard",
+    "dir": "../audio/songs/1998-07-26-funky-bitch/"
+  }
+]

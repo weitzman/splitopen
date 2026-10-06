@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Stemmy</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Righteous&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="donuts" aria-hidden="true"></div>
+
+<main class="app">
+  <header class="show">
+    <div class="eyebrow" id="eyebrow">Phish</div>
+    <h1 id="title">Stemmy</h1>
+    <div class="venue" id="venue"></div>
+    <nav class="songs" id="songs" aria-label="Songs"></nav>
+  </header>
+
+  <section class="loading" id="loading">
+    <div class="loading-label" id="loading-label">Loading stems…</div>
+    <div class="loading-bar"><div class="loading-fill" id="loading-fill"></div></div>
+  </section>
+
+  <section class="mixer" id="mixer" hidden></section>
+
+  <section class="transport" id="transport" hidden>
+    <button class="play" id="play" aria-label="Play">
+      <svg class="icon-play" viewBox="0 0 24 24"><path d="M7 4l14 8-14 8z"/></svg>
+      <svg class="icon-pause" viewBox="0 0 24 24"><path d="M6 4h4v16H6zM14 4h4v16h-4z"/></svg>
+    </button>
+    <div class="time" id="time-cur">0:00</div>
+    <input class="seek" id="seek" type="range" min="0" max="1000" value="0" step="1" aria-label="Seek">
+    <div class="time" id="time-dur">0:00</div>
+  </section>
+
+  <footer class="help">
+    <span><kbd>space</kbd> play / pause</span>
+    <span><kbd>1</kbd>–<kbd>5</kbd> solo</span>
+    <span><kbd>shift</kbd>+<kbd>1</kbd>–<kbd>5</kbd> mute</span>
+    <span><kbd>0</kbd> clear solos</span>
+  </footer>
+</main>
+
+<script src="app.js"></script>
+</body>
+</html>
