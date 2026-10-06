@@ -278,3 +278,27 @@ kbd {
   border: 1px solid var(--line);
   background: rgba(255,255,255,0.06);
 }
+
+/* First-run hints: a soft pulse on Play while paused, and on one S button
+   while playing (until the listener has used solo or mute). */
+.play.hint {
+  animation: play-pulse 2.2s ease-out infinite;
+}
+@keyframes play-pulse {
+  0%   { box-shadow: 0 0 0 0 rgba(242, 177, 52, 0.55); }
+  70%  { box-shadow: 0 0 0 14px rgba(242, 177, 52, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(242, 177, 52, 0); }
+}
+
+.btn.solo.hint {
+  animation: solo-glow 2.4s ease-in-out infinite;
+}
+@keyframes solo-glow {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255,255,255,0); border-color: var(--line); }
+  50%      { box-shadow: 0 0 8px color-mix(in srgb, var(--c) 45%, transparent); border-color: color-mix(in srgb, var(--c) 60%, var(--line)); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .play.hint { animation: none; box-shadow: 0 0 0 4px rgba(242, 177, 52, 0.35); }
+  .btn.solo.hint { animation: none; box-shadow: 0 0 8px color-mix(in srgb, var(--c) 45%, transparent); }
+}
