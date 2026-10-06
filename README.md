@@ -1,4 +1,4 @@
-# Stemmy
+# Split Open
 
 Web site: https://weitzman.github.io/stemmy/
 

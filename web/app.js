@@ -330,7 +330,12 @@ async function loadSong(id) {
   teardownChannels();
   song = next;
   band = bands[song.band] || bands.phish || { name: song.band, channels: {} };
-  STEMS = SLOTS.map(slot => ({ ...slot, who: slot.id, inst: '', ...(band.channels[slot.id] || {}) }));
+  // Band layout, then per-song overrides (e.g. a guest sitting in on one stem).
+  STEMS = SLOTS.map(slot => ({
+    ...slot, who: slot.id, inst: '',
+    ...(band.channels[slot.id] || {}),
+    ...((song.channels || {})[slot.id] || {}),
+  }));
   renderHeader();
   setPlayButton(false);
 
