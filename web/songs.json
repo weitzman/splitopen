@@ -20,5 +20,16 @@
     "city": "Dallas, TX",
     "source": "Soundboard",
     "dir": "../audio/songs/1998-07-26-funky-bitch/"
+  },
+  {
+    "id": "1997-03-29-wonderin",
+    "band": "widespread-panic",
+    "title": "Wonderin'",
+    "date": "1997-03-29",
+    "set": "Set I",
+    "venue": "Warfield Theater",
+    "city": "San Francisco, CA",
+    "source": "Soundboard",
+    "dir": "../audio/songs/1997-03-29-wonderin/"
   }
 ]
