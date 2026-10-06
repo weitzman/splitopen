@@ -3,30 +3,31 @@
 // so they stay sample-locked; mute/solo/fader are just gain changes.
 //
 // Switching songs is kept cheap three ways: the context runs at the stems'
-// native 44.1 kHz so decoding skips a resample, decoded songs stay in a
+// native 48 kHz so decoding skips a resample, decoded songs stay in a
 // memory-bounded cache, and the other songs are fetched (and, budget
 // permitting, decoded) in the background once the current one is ready.
 
 // Fixed stem slots; who plays each one comes from bands.json per song.
 const SLOTS = [
-  { id: 'guitar', file: 'guitar.mp3', color: 'var(--trey)' },
-  { id: 'bass',   file: 'bass.mp3',   color: 'var(--mike)' },
-  { id: 'keys',   file: 'keys.mp3',   color: 'var(--page)' },
-  { id: 'drums',  file: 'drums.mp3',  color: 'var(--fish)' },
-  { id: 'vocals', file: 'vocals.mp3', color: 'var(--vox)' },
+  { id: 'guitar', file: 'guitar.opus', color: 'var(--trey)' },
+  { id: 'bass',   file: 'bass.opus',   color: 'var(--mike)' },
+  { id: 'keys',   file: 'keys.opus',   color: 'var(--page)' },
+  { id: 'drums',  file: 'drums.opus',  color: 'var(--fish)' },
+  { id: 'vocals', file: 'vocals.opus', color: 'var(--vox)' },
 ];
 let STEMS = SLOTS;
 const STEM_FILES = SLOTS.map(s => s.file);
 
-// The stems are 44.1 kHz MP3s. Matching the context rate avoids resampling
-// every stem on decode, which is roughly 3x slower than decoding alone.
-const STEM_RATE = 44100;
+// The stems are Opus, which always decodes at 48 kHz. Matching the context
+// rate avoids resampling every stem on decode, which is roughly 3x slower
+// than decoding alone.
+const STEM_RATE = 48000;
 const ctx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: STEM_RATE });
 const master = ctx.createGain();
 master.connect(ctx.destination);
 
 // iOS Safari gives a tab on the order of 1 GB before killing it, and a single
-// 8-minute song decodes to ~850 MB of PCM. It also doesn't report
+// 8-minute song decodes to ~920 MB of PCM. It also doesn't report
 // deviceMemory. Treat touch devices that don't report memory as constrained:
 // no decoded-song cache, no background decoding, one stem decoded at a time,
 // and a real page reload on song switch so the old song's buffers are freed
@@ -101,7 +102,7 @@ async function fetchStem(url, onProgress, priority) {
   return bytes.buffer;
 }
 
-// Compressed stems, keyed by song id. ~10 MB per stem, so every song fits.
+// Compressed stems, keyed by song id. ~8 MB per stem, so every song fits.
 const byteCache = new Map();   // id -> Promise<ArrayBuffer[]>
 const bytesReady = new Set();  // ids whose fetch has finished
 
@@ -116,7 +117,7 @@ function fetchSongBytes(s, onProgress, priority = 'high') {
   return byteCache.get(s.id);
 }
 
-// Decoded stems: ~170 MB per stem for an 8-minute song, so the cache has a
+// Decoded stems: ~185 MB per stem for an 8-minute song, so the cache has a
 // byte budget of a quarter of device memory, capped at 2 GB. Browsers that
 // don't report memory (Safari) are assumed to be small. The song playing now
 // is always kept; beyond that, least recently used songs are dropped.
@@ -217,7 +218,7 @@ async function warmOtherSongs(current) {
 }
 
 // On constrained devices each stem is folded to mono right after decoding,
-// which halves what a song costs to keep around (~850 MB -> ~425 MB for an
+// which halves what a song costs to keep around (~920 MB -> ~460 MB for an
 // 8-minute song). The phone speaker is mono anyway; headphones lose the
 // stereo image of the separated stems, which is a fair trade for not crashing.
 function toMono(buf) {
@@ -232,10 +233,12 @@ function toMono(buf) {
   return mono;
 }
 
-// Rough decoded size from the compressed size: 192 kbps stereo MP3 at 44.1 kHz
-// expands by ~14.7x (16-bit PCM is 7.35x, Float32 doubles it).
+// Rough decoded size from the compressed size: 128 kbps stereo Opus decoded
+// to Float32 at 48 kHz expands by 24x (48000 * 2 ch * 4 bytes * 8 / 128000).
+// Opus is variable bit rate, so a mostly silent stem comes in well under
+// 128 kbps and this undershoots for it; the cache itself counts real sizes.
 function estimateDecodedBytes(arrayBuffer) {
-  return arrayBuffer.byteLength * 15;
+  return arrayBuffer.byteLength * 24;
 }
 
 // ---------- graph ----------
@@ -275,6 +278,97 @@ function applyMuteSolo() {
     c.ui.solo.classList.toggle('on', c.solo);
   }
   updateHints();
+  writeHash();
+}
+
+// ---------- URL state ----------
+//
+// The hash names the song first, so older links still work, then carries the
+// mix and the moment as &-separated key=value pairs:
+//   #1998-07-26-funky-bitch&solo=keys&mute=vocals&g=guitar:0.8,bass:1.2&t=312
+// Keys at their defaults are left out, so an untouched mix is just #songid.
+// The hash is rewritten with replaceState so Back still returns to the
+// previous song rather than stepping through every mute.
+
+const GAIN_MAX = 1.5;
+let hashPos = null; // position (s) last written to the hash; null means none
+
+function findSong(id) {
+  return songs.find(s => s.id === id) || songs[0];
+}
+
+function parseHash() {
+  const [idPart, ...pairs] = location.hash.slice(1).split('&');
+  const state = { id: decodeURIComponent(idPart), solo: [], mute: [], gains: {}, t: null };
+  const slotIds = SLOTS.map(slot => slot.id);
+  for (const pair of pairs) {
+    const eq = pair.indexOf('=');
+    if (eq < 0) continue;
+    const key = pair.slice(0, eq);
+    const val = decodeURIComponent(pair.slice(eq + 1));
+    if (key === 'solo' || key === 'mute') {
+      state[key] = val.split(',').filter(id => slotIds.includes(id));
+    } else if (key === 'g') {
+      for (const item of val.split(',')) {
+        const [id, v] = item.split(':');
+        const n = Number(v);
+        if (slotIds.includes(id) && Number.isFinite(n)) {
+          state.gains[id] = Math.max(0, Math.min(GAIN_MAX, n));
+        }
+      }
+    } else if (key === 't') {
+      const n = Number(val);
+      if (Number.isFinite(n) && n >= 0) state.t = n;
+    }
+  }
+  return state;
+}
+
+function buildHash() {
+  const parts = [song.id];
+  const solo = channels.filter(c => c.solo).map(c => c.def.id);
+  const mute = channels.filter(c => c.mute).map(c => c.def.id);
+  const gains = channels
+    .map(c => [c.def.id, Number(c.ui.fader.value)])
+    .filter(([, g]) => g !== 1)
+    .map(([id, g]) => id + ':' + g);
+  if (solo.length) parts.push('solo=' + solo.join(','));
+  if (mute.length) parts.push('mute=' + mute.join(','));
+  if (gains.length) parts.push('g=' + gains.join(','));
+  const t = Math.round(hashPos || 0);
+  if (t > 0) parts.push('t=' + t);
+  return '#' + parts.join('&');
+}
+
+function writeHash() {
+  if (!song || !channels.length) return;
+  const h = buildHash();
+  if (h !== location.hash) history.replaceState(null, '', h);
+}
+
+// Position goes into the hash only on seek, pause, or Copy link, never from
+// the animation frame.
+function writePosition() {
+  hashPos = position();
+  writeHash();
+}
+
+// Apply a parsed hash to the loaded channels. Solos and mutes set here count
+// as mixing for the hints, but the listener has not pressed a button, so this
+// does not retire the solo hint the way noteMixUsed() would.
+function applyMixState(state) {
+  for (const c of channels) {
+    c.solo = state.solo.includes(c.def.id);
+    c.mute = state.mute.includes(c.def.id);
+    const g = state.gains[c.def.id] ?? 1;
+    c.ui.fader.value = g;
+    c.fader.gain.setTargetAtTime(g, ctx.currentTime, 0.01);
+  }
+  if (state.t !== null) {
+    seek(state.t);
+    hashPos = offset;
+  }
+  applyMuteSolo();
 }
 
 // ---------- first-run hints ----------
@@ -387,6 +481,7 @@ function pause() {
   playing = false;
   keepaliveStop();
   setPlayButton(false);
+  writePosition();
 }
 
 function stop(at) {
@@ -403,6 +498,8 @@ function seek(to) {
   playing = false;
   offset = Math.max(0, Math.min(duration, to));
   if (wasPlaying) startSources(offset);
+  ui.seek.value = Math.round(offset / duration * 1000);
+  ui.cur.textContent = fmt(offset);
 }
 
 // Left and Right arrows step the playhead 5 s either way, through seek() so
@@ -452,10 +549,11 @@ function buildStrip(c, index) {
   fader.addEventListener('input', () => {
     c.fader.gain.setTargetAtTime(Number(fader.value), ctx.currentTime, 0.01);
   });
+  fader.addEventListener('change', writeHash);
   mute.addEventListener('click', () => { c.mute = !c.mute; noteMixUsed(); applyMuteSolo(); });
   solo.addEventListener('click', () => { c.solo = !c.solo; noteMixUsed(); applyMuteSolo(); });
 
-  c.ui = { strip, mute, solo, meter };
+  c.ui = { strip, mute, solo, meter, fader };
   return strip;
 }
 
@@ -488,8 +586,10 @@ function wireTransport() {
   ui.seek = document.getElementById('seek');
   ui.cur = document.getElementById('time-cur');
   ui.dur = document.getElementById('time-dur');
+  ui.link = document.getElementById('copy-link');
 
   ui.play.addEventListener('click', () => playing ? pause() : play());
+  ui.link.addEventListener('click', copyLink);
   ui.seek.addEventListener('pointerdown', () => { ui.seeking = true; });
   ui.seek.addEventListener('input', () => {
     ui.cur.textContent = fmt(ui.seek.value / 1000 * duration);
@@ -497,6 +597,7 @@ function wireTransport() {
   ui.seek.addEventListener('change', () => {
     ui.seeking = false;
     seek(ui.seek.value / 1000 * duration);
+    writePosition();
   });
   wireNudgeKeys();
 
@@ -504,6 +605,7 @@ function wireTransport() {
     if (e.target.tagName === 'INPUT') e.target.blur();
     if (!channels.length) return;
     if (e.code === 'Space') { e.preventDefault(); playing ? pause() : play(); return; }
+    if (e.code === 'KeyL' && !e.metaKey && !e.ctrlKey && !e.altKey) { copyLink(); return; }
     if (e.key === '0') { channels.forEach(c => { c.solo = false; }); applyMuteSolo(); return; }
     const n = Number(e.code.replace('Digit', ''));
     if (e.code.startsWith('Digit') && n >= 1 && n <= channels.length) {
@@ -513,6 +615,40 @@ function wireTransport() {
       applyMuteSolo();
     }
   });
+}
+
+// Fallback for webviews that deny the Clipboard API: the legacy copy command
+// still honors a recent click.
+function copyViaSelection(text) {
+  const ta = document.createElement('textarea');
+  ta.value = text;
+  ta.setAttribute('readonly', '');
+  ta.style.position = 'fixed';
+  ta.style.opacity = '0';
+  document.body.appendChild(ta);
+  ta.select();
+  let ok = false;
+  try { ok = document.execCommand('copy'); } catch (_) { /* unsupported */ }
+  ta.remove();
+  return ok;
+}
+
+// Copies a link to the current mix at the current moment, so the position is
+// committed to the hash first.
+let linkTimer = null;
+async function copyLink() {
+  if (!channels.length) return;
+  writePosition();
+  let ok = false;
+  try {
+    await navigator.clipboard.writeText(location.href);
+    ok = true;
+  } catch (_) {
+    ok = copyViaSelection(location.href);
+  }
+  ui.link.textContent = ok ? 'Copied' : 'Copy failed';
+  clearTimeout(linkTimer);
+  linkTimer = setTimeout(() => { ui.link.textContent = 'Copy link'; }, 1500);
 }
 
 function renderHeader() {
@@ -534,19 +670,23 @@ function renderSongList() {
     btn.dataset.id = s.id;
     const who = (bands[s.band] || {}).name || s.band;
     btn.innerHTML = `${s.title}<small>${who}</small>`;
-    btn.addEventListener('click', () => { location.hash = s.id; });
+    btn.addEventListener('click', () => {
+      if (song && s.id === song.id) return;
+      location.hash = s.id;
+    });
     nav.appendChild(btn);
   }
 }
 
 // ---------- song switching ----------
 
-async function loadSong(id) {
-  const next = songs.find(s => s.id === id) || songs[0];
+async function loadSong(state) {
+  const next = findSong(state.id);
   if (song && next.id === song.id) return;
   const token = ++loadToken;
 
   teardownChannels();
+  hashPos = null;
   song = next;
   band = bands[song.band] || bands.phish || { name: song.band, channels: {} };
   // Band layout, then per-song overrides (e.g. a guest sitting in on one stem).
@@ -576,10 +716,11 @@ async function loadSong(id) {
     });
     ui.dur.textContent = fmt(duration);
     ui.seek.value = 0;
+    ui.cur.textContent = fmt(0);
     loading.hidden = true;
     mixer.hidden = false;
     document.getElementById('transport').hidden = false;
-    applyMuteSolo();
+    applyMixState(state);
     warmOtherSongs(song);
   } catch (err) {
     if (token !== loadToken) return;
@@ -603,8 +744,13 @@ async function loadSong(id) {
     return;
   }
   renderSongList();
-  const fromHash = () => loadSong(decodeURIComponent(location.hash.slice(1)));
+  const fromHash = () => loadSong(parseHash());
   window.addEventListener('hashchange', () => {
+    // Our own replaceState writes never fire this, so it is a song click, a
+    // Back/Forward step, or a hand-edited URL. A same-song change only has
+    // to apply the mix; only a new song id loads stems (or reloads the page).
+    const state = parseHash();
+    if (song && channels.length && findSong(state.id).id === song.id) return applyMixState(state);
     if (!(LOW_MEMORY && song)) return fromHash();
     // Drop every reference to the old song's PCM before the reload. Safari
     // keeps the same process across a reload and collects the old page's
