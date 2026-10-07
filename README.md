@@ -30,5 +30,10 @@ copies it with the current position.
 Run locally with any static server from the repo root, e.g.
 `python3 -m http.server 8765`, then open `http://localhost:8765/web/`.
 
+The site is served by GitHub Pages from the `gh-pages` branch, which a
+workflow refreshes from `main` on every push. Each pull request gets a
+preview at `https://weitzman.github.io/splitopen/pr-preview/pr-<number>/`,
+linked from a comment on the PR and removed when it closes.
+
 Source recordings come from the [Live Music Archive](https://archive.org/details/etree)
 and are for non-commercial listening only.
