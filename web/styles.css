@@ -285,7 +285,29 @@ h1 {
 .play.playing .icon-pause { display: block; }
 
 .time { font-variant-numeric: tabular-nums; color: var(--muted); font-size: 14px; min-width: 44px; text-align: center; }
-.seek { flex: 1; accent-color: var(--gold); cursor: pointer; }
+.seek { flex: 1; min-width: 0; accent-color: var(--gold); cursor: pointer; }
+/* Share icon, in the style of GitHub's small clipboard buttons. Where there
+   is no share sheet the link is copied instead, and the glyph gives way to a
+   check for a moment, or turns red if the copy failed. */
+.btn.share {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+}
+.btn.share:hover { color: var(--text); }
+.btn.share svg { width: 18px; height: 18px; }
+.btn.share .icon-check { display: none; width: 16px; height: 16px; fill: currentColor; }
+.btn.share.copied { color: var(--gold); }
+.btn.share.copied .icon-share { display: none; }
+.btn.share.copied .icon-check { display: block; }
+.btn.share.failed { color: var(--donut); }
+@media (max-width: 720px) {
+  .transport { gap: 10px 12px; padding: 12px; }
+}
 
 .help {
   display: flex;
@@ -302,6 +324,14 @@ h1 {
   text-align: center;
   font-style: italic;
   opacity: 0.8;
+}
+.colophon a {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.colophon a:hover {
+  color: var(--text);
 }
 kbd {
   font-family: inherit;
