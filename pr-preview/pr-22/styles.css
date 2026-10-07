@@ -75,15 +75,49 @@ h1 {
   color: var(--text);
   text-shadow: 0 0 24px rgba(242, 177, 52, 0.25);
 }
-.venue { color: var(--muted); font-size: 14px; }
-
-.songs {
-  display: flex;
+/* The title is the song picker: the words plus a chevron that brightens on hover. */
+.song-pick {
+  display: inline-flex;
   flex-wrap: wrap;
   justify-content: center;
-  gap: 8px;
-  margin-top: 16px;
+  align-items: center;
+  gap: 0.15em;
+  padding: 0 0.1em;
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  text-shadow: inherit;
+  cursor: pointer;
+  border-radius: 12px;
 }
+/* The pill beside the title says there are more songs and opens the picker. */
+.pick-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 0.25em;
+  padding: 6px 12px 6px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--gold);
+  background: rgba(242, 177, 52, 0.12);
+  color: var(--gold);
+  font: 600 14px Inter, sans-serif;
+  letter-spacing: 0;
+  text-shadow: none;
+  white-space: nowrap;
+  vertical-align: middle;
+  transition: background 0.15s, color 0.15s;
+}
+.pick-pill[hidden] { display: none; }
+.pick-pill .chevron { width: 16px; height: 16px; transition: transform 0.15s; }
+.song-pick:hover .pick-pill, .song-pick:focus-visible .pick-pill { background: var(--gold); color: #1a1200; }
+.song-pick:hover .chevron { transform: translateY(2px); }
+.song-pick:focus-visible { outline: 2px solid var(--gold); outline-offset: 4px; }
+.song-row:focus-visible { outline: 2px solid var(--gold); outline-offset: -2px; }
+.venue { color: var(--muted); font-size: 14px; }
+
 .song {
   font: 600 13px Inter, sans-serif;
   padding: 8px 14px;
@@ -261,7 +295,6 @@ h1 {
   .logo { align-self: center; margin-bottom: 0; }
   .show { padding-top: 0; }
   h1 { margin: 0 0 4px; }
-  .songs { margin-top: 10px; }
   .mixer { grid-template-columns: 1fr; gap: 6px; }
   .strip {
     position: relative;
@@ -350,7 +383,7 @@ a.guide-by:hover { color: var(--gold); }
   border: 1px solid var(--line);
   background: rgba(0,0,0,0.25);
   color: var(--text);
-  font: 14px Inter, sans-serif;
+  font: 16px Inter, sans-serif; /* 16px: below that, iOS Safari zooms the page when the field is focused */
 }
 .times input:focus, .edit-note:focus { outline: 1px solid var(--gold); }
 .guide.editing .guide-tips { max-height: 60vh; }
@@ -446,9 +479,10 @@ li.looping .icon.loop { background: var(--gold); border-color: var(--gold); colo
 .tip-editor .mix-btn:hover { background: rgba(255,255,255,0.06); }
 .tip-editor .mix-hint { font-size: 12px; color: var(--gold); text-decoration: underline; text-underline-offset: 2px; }
 
-/* The mix sheet: a modal with one row per player, Mute and Solo as on the
-   strips; a bottom sheet on phones. */
-.mix-sheet {
+/* Sheets: modals that drop in on desktop and rise from the bottom on
+   phones. The mix sheet has one row per player; the song sheet lists the
+   songs by band with a search box. */
+.sheet {
   width: min(440px, calc(100vw - 32px));
   padding: 18px 18px 16px;
   border: 1px solid var(--line);
@@ -457,7 +491,52 @@ li.looping .icon.loop { background: var(--gold); border-color: var(--gold); colo
   color: var(--text);
   box-shadow: 0 16px 48px rgba(0,0,0,0.6);
 }
-.mix-sheet::backdrop { background: rgba(5, 8, 24, 0.7); }
+.sheet::backdrop { background: rgba(5, 8, 24, 0.7); }
+.sheet:focus { outline: none; } /* the sheet takes focus on phones; no ring for that */
+.song-sheet { width: min(520px, calc(100vw - 32px)); max-height: min(80vh, 720px); display: none; flex-direction: column; }
+.song-sheet[open] { display: flex; }
+.sheet-head { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; margin-bottom: 10px; }
+.sheet-head .sheet-title { margin: 0; }
+.sheet-search {
+  flex: 1;
+  min-width: 160px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: rgba(0,0,0,0.25);
+  color: var(--text);
+  font: 16px Inter, sans-serif; /* 16px: below that, iOS Safari zooms the page when the field is focused */
+}
+.sheet-search:focus { outline: 1px solid var(--gold); }
+.song-list { overflow-y: auto; min-height: 0; margin: 0 -6px; padding: 0 6px; }
+.song-band {
+  margin: 12px 6px 4px;
+  font-size: 12px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+}
+.song-band:first-child { margin-top: 2px; }
+.song-row {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  width: 100%;
+  padding: 8px 10px;
+  border: none;
+  border-radius: 8px;
+  background: none;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+.song-row:hover { background: rgba(255,255,255,0.06); }
+.song-row.on { background: rgba(242, 177, 52, 0.14); }
+.song-row.on .song-title { color: var(--gold); }
+.song-title { font: 600 15px Inter, sans-serif; }
+.song-where { font-size: 12px; color: var(--muted); }
+.song-none { margin: 16px 6px; color: var(--muted); font-size: 14px; }
 .sheet-title {
   margin: 0 0 12px;
   font-family: "Space Grotesk", Inter, sans-serif;
@@ -485,7 +564,7 @@ li.looping .icon.loop { background: var(--gold); border-color: var(--gold); colo
 .sheet-actions .spacer { flex: 1; }
 .sheet-actions .btn.use { background: var(--gold); border-color: var(--gold); color: #1a1200; }
 @media (max-width: 720px) {
-  .mix-sheet {
+  .sheet {
     position: fixed;
     inset: auto 0 0 0;
     width: 100%;
@@ -494,6 +573,7 @@ li.looping .icon.loop { background: var(--gold); border-color: var(--gold); colo
     border-radius: 16px 16px 0 0;
     padding-bottom: calc(16px + env(safe-area-inset-bottom));
   }
+  .song-sheet { max-height: 85vh; }
 }
 
 /* The tip editor's head: the mix label as a button. */
