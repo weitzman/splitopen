@@ -340,8 +340,10 @@ a.guide-by:hover { color: var(--gold); }
 .guide-status[hidden] { display: none; }
 .guide-head .btn[hidden] { display: none; }
 
-/* Writing a guide: one editable card per tip. */
-.edit-row input[type="text"], .edit-note {
+/* Writing a guide. The tip list is one compact line per tip: handle, mix,
+   start (and a quiet optional end), then edit / play / delete, with the
+   first line of the note beneath. */
+.edit-row input[type="text"], .times input, .edit-note {
   min-width: 0;
   padding: 6px 8px;
   border-radius: 8px;
@@ -350,30 +352,38 @@ a.guide-by:hover { color: var(--gold); }
   color: var(--text);
   font: 14px Inter, sans-serif;
 }
-.edit-row input:focus, .edit-note:focus { outline: 1px solid var(--gold); }
+.times input:focus, .edit-note:focus { outline: 1px solid var(--gold); }
 .guide.editing .guide-tips { max-height: 60vh; }
-.guide-tips li.edit {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 8px 6px;
-  border-radius: 8px;
-  color: var(--muted);
+.icon {
+  width: 30px;
+  height: 30px;
+  padding: 6px;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  background: rgba(255,255,255,0.06);
+  color: var(--text);
+  cursor: pointer;
+  display: inline-grid;
+  place-items: center;
 }
-.guide-tips li.edit.on { background: rgba(255,255,255,0.05); color: var(--text); }
-.edit-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px 8px;
-  font-size: 13px;
+.icon svg { width: 16px; height: 16px; }
+.icon:hover { background: rgba(255,255,255,0.12); }
+li.looping .icon.loop { background: var(--gold); border-color: var(--gold); color: #1a1200; }
+.mini {
+  height: 28px;
+  min-width: 28px;
+  padding: 0 8px;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  background: rgba(255,255,255,0.06);
+  color: var(--text);
+  font: 600 12px Inter, sans-serif;
+  cursor: pointer;
 }
-.edit-row .span { display: inline-flex; align-items: center; gap: 4px; }
-.edit-row .at, .edit-row .to { width: 4.5em; font-variant-numeric: tabular-nums; text-align: center; }
-.edit-row .to:disabled { color: var(--muted); }
-.edit-row .mix { color: var(--text); }
-.edit-row .mix .who { font-family: "Space Grotesk", Inter, sans-serif; font-size: 15px; }
-.edit-row .spacer { flex: 1; }
+.mini:hover { background: rgba(255,255,255,0.12); }
+.edit-note { width: 100%; resize: vertical; line-height: 1.4; }
+.song.chip.new { background: none; border-style: dashed; color: var(--muted); }
+.song.chip.new:hover { color: var(--text); }
 .handle {
   cursor: grab;
   color: var(--muted);
@@ -385,28 +395,110 @@ a.guide-by:hover { color: var(--gold); }
 }
 .guide-tips li.dragging { opacity: 0.6; background: rgba(242, 177, 52, 0.12); }
 .guide-tips li.dragging .handle { cursor: grabbing; }
-.guide-tips li.pending { border-left: 2px solid var(--gold); }
 
-/* Describing: one card per tip, the passage on top, the description below. */
-.guide.describing .guide-tips { max-height: none; }
-.guide-tips li.card {
+/* Editing one tip: the list and mixer step aside for its times and note. */
+.guide.tip-editing .guide-tips { max-height: none; overflow: visible; }
+.guide-tips li.tip-editor {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 12px 10px;
-  margin: 6px 0;
-  border-radius: 10px;
-  border: 1px solid var(--line);
-  background: rgba(0,0,0,0.18);
+  gap: 10px;
+  padding: 6px 0;
   color: var(--text);
 }
-.guide-tips li.card.looping { border-color: var(--gold); box-shadow: 0 0 10px rgba(242, 177, 52, 0.25); }
+/* Start and End sit in one grid so their values and Set buttons line up. */
+.tip-editor .times {
+  display: grid;
+  grid-template-columns: max-content max-content max-content max-content;
+  justify-content: start;
+  align-items: center;
+  gap: 8px 10px;
+  font-size: 14px;
+}
+.tip-editor .time-row { display: contents; }
+.tip-editor .time-row .time-label { grid-column: 1; } /* each row starts at the label */
+.tip-editor .scrub-hint { grid-column: 1 / -1; }
+.tip-editor .time-row.opt .time-label { color: var(--muted); }
+.tip-editor .time-value { font-variant-numeric: tabular-nums; min-width: 3.5em; font-size: 16px; }
+.tip-editor .time-value.unset { color: var(--muted); }
+.tip-editor .clear-to:disabled { opacity: 0.35; cursor: default; }
+.tip-editor .mini.quiet { color: var(--muted); }
+.tip-editor .scrub-hint { font-size: 12px; color: var(--muted); }
+.marks i.editing { opacity: 1; background: var(--gold); box-shadow: 0 0 6px rgba(242, 177, 52, 0.7); }
+.tip-editor .actions { display: flex; gap: 8px; align-items: center; }
+.tip-editor .btn.save { background: var(--gold); border-color: var(--gold); color: #1a1200; }
+.tip-editor .btn.loop { display: inline-flex; align-items: center; gap: 6px; }
+.tip-editor .btn.loop svg { width: 14px; height: 14px; fill: currentColor; }
+.tip-editor.looping .btn.loop { background: var(--gold); border-color: var(--gold); color: #1a1200; }
+.tip-editor .btn.discard { color: var(--muted); margin-left: auto; }
+.tip-editor .mix-btn {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 6px 10px;
+  margin: -6px -10px;
+  border: none;
+  border-radius: 8px;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+.tip-editor .mix-btn:hover { background: rgba(255,255,255,0.06); }
+.tip-editor .mix-hint { font-size: 12px; color: var(--gold); text-decoration: underline; text-underline-offset: 2px; }
+
+/* The mix sheet: a modal with one row per player, Mute and Solo as on the
+   strips; a bottom sheet on phones. */
+.mix-sheet {
+  width: min(440px, calc(100vw - 32px));
+  padding: 18px 18px 16px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--bg-2);
+  color: var(--text);
+  box-shadow: 0 16px 48px rgba(0,0,0,0.6);
+}
+.mix-sheet::backdrop { background: rgba(5, 8, 24, 0.7); }
+.sheet-title {
+  margin: 0 0 12px;
+  font-family: "Space Grotesk", Inter, sans-serif;
+  font-size: 18px;
+}
+.sheet-rows { display: flex; flex-direction: column; gap: 6px; }
+.sheet-row {
+  --c: var(--gold);
+  cursor: pointer;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 2px solid var(--c);
+  border-radius: 10px;
+  background: var(--panel);
+  transition: opacity 0.15s;
+}
+.sheet-row.inactive { opacity: 0.45; }
+.sheet-row .btn[hidden] { display: none; }
+.sheet-row .who { font-family: "Space Grotesk", Inter, sans-serif; font-size: 18px; color: var(--c); line-height: 1; }
+.sheet-row .inst { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.12em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sheet-actions { display: flex; align-items: center; gap: 8px; margin-top: 14px; }
+.sheet-actions .spacer { flex: 1; }
+.sheet-actions .btn.use { background: var(--gold); border-color: var(--gold); color: #1a1200; }
+@media (max-width: 720px) {
+  .mix-sheet {
+    position: fixed;
+    inset: auto 0 0 0;
+    width: 100%;
+    max-width: none;
+    margin: 0;
+    border-radius: 16px 16px 0 0;
+    padding-bottom: calc(16px + env(safe-area-inset-bottom));
+  }
+}
+
+/* The tip editor's head: the mix label as a button. */
 .card-head { display: flex; align-items: center; gap: 10px; font-size: 14px; }
 .card-head .mix .who { font-family: "Space Grotesk", Inter, sans-serif; font-size: 16px; }
-.card-head .span { color: var(--muted); font-variant-numeric: tabular-nums; }
-.mini.loop { width: 32px; height: 32px; padding: 0; border-radius: 50%; }
-li.looping .mini.loop { background: var(--gold); border-color: var(--gold); color: #1a1200; }
-.btn.guide-add.pending { background: var(--gold); border-color: var(--gold); color: #1a1200; }
 .mini {
   height: 28px;
   min-width: 28px;
@@ -443,8 +535,7 @@ li.looping .mini.loop { background: var(--gold); border-color: var(--gold); colo
   text-underline-offset: 2px;
 }
 .more[hidden] { display: none; }
-.guide-tips li { display: flex; flex-wrap: wrap; }
-.guide-tips .more { margin: -4px 0 6px 54px; } /* under the text, clear of the time column */
+
 .btn.continue {
   align-self: flex-start;
   background: var(--gold);
@@ -459,32 +550,50 @@ li.looping .mini.loop { background: var(--gold); border-color: var(--gold); colo
   max-height: 240px;
   overflow-y: auto;
 }
-.guide-tips .tip {
-  display: flex;
-  gap: 12px;
-  align-items: baseline;
-  flex: 1 0 100%;
-  min-width: 0;
+/* Tip rows, read or written alike: mix and times on the first line, the
+   note beneath clamped behind "more". Writing adds a handle on the left
+   and edit / play / delete on the right. */
+.guide-tips li.tip-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas: "jump" "note" "more";
+  align-items: center;
+  column-gap: 10px;
+  row-gap: 2px;
   padding: 7px 6px;
+  border-radius: 8px;
+  color: var(--muted);
+  font-size: 14px;
+}
+.guide-tips li.tip-row.edit {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-areas: "handle jump actions" "handle note note" "handle more more";
+}
+.guide-tips li.tip-row.on { background: rgba(255,255,255,0.05); color: var(--text); }
+.guide-tips li.tip-row .handle { grid-area: handle; }
+.guide-tips li.tip-row .jump {
+  grid-area: jump;
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  min-width: 0;
+  padding: 0;
   border: none;
   background: none;
-  color: var(--muted);
-  font: 14px Inter, sans-serif;
+  color: inherit;
+  font: inherit;
   text-align: left;
   cursor: pointer;
-  border-radius: 6px;
 }
-.guide-tips .tip:hover { background: rgba(255,255,255,0.06); color: var(--text); }
-.guide-tips li.on .tip { color: var(--text); }
-.guide-tips .tip .body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.guide-tips .tip .mix { font-size: 13px; }
-.guide-tips .tip .mix .who { font-family: "Space Grotesk", Inter, sans-serif; font-size: 14px; }
-.guide-tips li.on .tip time { color: var(--gold); }
-.guide-tips time {
-  font-variant-numeric: tabular-nums;
-  flex-shrink: 0;
-  min-width: 36px;
-}
+.guide-tips li.tip-row .mix { color: var(--text); min-width: 0; }
+.guide-tips li.tip-row .mix .who { font-family: "Space Grotesk", Inter, sans-serif; font-size: 15px; }
+.guide-tips li.tip-row .when { font-variant-numeric: tabular-nums; white-space: nowrap; color: var(--text); }
+.guide-tips li.tip-row .when .to { color: var(--muted); }
+.guide-tips li.tip-row.on .when .at { color: var(--gold); }
+.guide-tips li.tip-row .actions { grid-area: actions; display: inline-flex; gap: 4px; }
+.guide-tips li.tip-row .note { grid-area: note; }
+.guide-tips li.tip-row .note[hidden] { display: none; }
+.guide-tips li.tip-row .more { grid-area: more; justify-self: start; }
 
 /* Transport */
 .transport {
@@ -521,9 +630,9 @@ li.looping .mini.loop { background: var(--gold); border-color: var(--gold); colo
 .seek-wrap { flex: 1; min-width: 0; position: relative; display: flex; align-items: center; }
 .seek { flex: 1; min-width: 0; accent-color: var(--gold); cursor: pointer; }
 /* Guide tips are marked over the seek bar: a span for the passage (a tick
-   when it runs to the next tip), each with its note as a tooltip; clicking
-   one jumps to the tip. The row is inset by half the thumb so the marks
-   line up with where the thumb lands. */
+   when it runs to the next tip). The marks are decoration only; every
+   pointer goes to the seek bar beneath, so it can be dragged anywhere. The
+   row is inset by half the thumb so the marks line up with the thumb. */
 .marks {
   position: absolute;
   left: 8px;
@@ -542,15 +651,8 @@ li.looping .mini.loop { background: var(--gold); border-color: var(--gold); colo
   background: var(--gold);
   opacity: 0.6;
   border-radius: 1px;
-  cursor: pointer;
-  pointer-events: auto;
 }
-.marks i::before { /* a wider hit area than the tick itself */
-  content: '';
-  position: absolute;
-  inset: -4px -5px;
-}
-.marks i:hover, .marks i.on { opacity: 1; }
+.marks i.on { opacity: 1; }
 /* Share icon, in the style of GitHub's small clipboard buttons. Where there
    is no share sheet the link is copied instead, and the glyph gives way to a
    check for a moment, or turns red if the copy failed. */
@@ -634,16 +736,12 @@ kbd {
   animation: solo-glow 2.4s ease-in-out infinite;
 }
 
-/* While describing, Save is the way out, so it pulses the way Play does. */
-.guide.describing .btn.guide-edit {
-  animation: play-pulse 2.2s ease-out infinite;
-}
 @keyframes solo-glow {
   0%, 100% { box-shadow: 0 0 0 0 rgba(255,255,255,0); border-color: var(--line); }
   50%      { box-shadow: 0 0 8px color-mix(in srgb, var(--c) 45%, transparent); border-color: color-mix(in srgb, var(--c) 60%, var(--line)); }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .play.hint, .guide.describing .btn.guide-edit { animation: none; box-shadow: 0 0 0 4px rgba(242, 177, 52, 0.35); }
+  .play.hint { animation: none; box-shadow: 0 0 0 4px rgba(242, 177, 52, 0.35); }
   .btn.solo.hint { animation: none; box-shadow: 0 0 8px color-mix(in srgb, var(--c) 45%, transparent); }
 }
