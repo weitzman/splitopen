@@ -333,6 +333,11 @@ h1 {
 .colophon a:hover {
   color: var(--text);
 }
+/* Touch-only devices have no keyboard, so the shortcut legend is noise there. */
+@media (hover: none) and (pointer: coarse) {
+  .help > span { display: none; }
+  .colophon { margin-top: 0; }
+}
 kbd {
   font-family: inherit;
   font-size: 11px;
