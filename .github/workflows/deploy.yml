@@ -1,6 +1,5 @@
-# Publishes the site (web/ at the root, audio/ beside it) to the gh-pages
-# branch, which GitHub Pages serves. pr-preview/ is left alone so open PR
-# previews (see preview.yml) survive.
+# Publishes main to the gh-pages branch, which GitHub Pages serves.
+# pr-preview/ is left alone so open PR previews (see preview.yml) survive.
 name: Deploy site
 
 on:
@@ -19,13 +18,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Build site
-        run: scripts/build-site.sh
-
       - name: Publish to gh-pages
         uses: JamesIves/github-pages-deploy-action@v4
         with:
-          folder: _site
+          folder: .
           branch: gh-pages
           clean: true
           clean-exclude: pr-preview
