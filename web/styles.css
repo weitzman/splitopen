@@ -309,6 +309,14 @@ h1 {
   font-style: italic;
   opacity: 0.8;
 }
+.colophon a {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.colophon a:hover {
+  color: var(--text);
+}
 kbd {
   font-family: inherit;
   font-size: 11px;
