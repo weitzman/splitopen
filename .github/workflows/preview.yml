@@ -21,13 +21,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Build site
-        if: github.event.action != 'closed'
-        run: scripts/build-site.sh
-
       - name: Deploy preview
         uses: rossjrw/pr-preview-action@v1
         with:
-          source-dir: _site
+          source-dir: .
           preview-branch: gh-pages
           umbrella-dir: pr-preview
