@@ -45,30 +45,48 @@ if (navigator.audioSession) {
   try { navigator.audioSession.type = 'playback'; } catch (_) { /* unsupported value */ }
 }
 
-function silentWavUrl() {
-  const rate = 8000, frames = rate / 2; // half a second of silence
-  const buf = new ArrayBuffer(44 + frames * 2);
+// 8 kHz 8-bit mono silence; 8 KB per second, so a 10-minute song is ~5 MB.
+function silentWavUrl(seconds) {
+  const rate = 8000, frames = rate * seconds;
+  const buf = new ArrayBuffer(44 + frames);
   const v = new DataView(buf);
   const str = (o, t) => { for (let i = 0; i < t.length; i++) v.setUint8(o + i, t.charCodeAt(i)); };
-  str(0, 'RIFF'); v.setUint32(4, 36 + frames * 2, true); str(8, 'WAVE');
+  str(0, 'RIFF'); v.setUint32(4, 36 + frames, true); str(8, 'WAVE');
   str(12, 'fmt '); v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
-  v.setUint32(24, rate, true); v.setUint32(28, rate * 2, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true);
-  str(36, 'data'); v.setUint32(40, frames * 2, true);
+  v.setUint32(24, rate, true); v.setUint32(28, rate, true); v.setUint16(32, 1, true); v.setUint16(34, 8, true);
+  str(36, 'data'); v.setUint32(40, frames, true);
+  new Uint8Array(buf, 44).fill(0x80); // unsigned 8-bit silence
   return URL.createObjectURL(new Blob([buf], { type: 'audio/wav' }));
 }
 
+// Safari copies this element's currentTime into the Media Session position
+// state whenever the element seeks, loops, or pauses, which is what the lock
+// screen scrubber shows. So the silent file outlasts the song and the element's
+// clock is kept on the song position: it starts at the current offset and
+// follows every seek.
 let keepalive = null;
+let keepaliveSeconds = 0;
 function keepaliveStart() {
   if (!keepalive) {
-    keepalive = new Audio(silentWavUrl());
+    keepalive = new Audio();
     keepalive.loop = true;
     keepalive.setAttribute('playsinline', '');
     mediaSessionWatchKeepalive(keepalive);
   }
+  const seconds = Math.ceil(duration) + 5;
+  if (keepaliveSeconds < seconds) {
+    if (keepalive.src) URL.revokeObjectURL(keepalive.src);
+    keepalive.src = silentWavUrl(seconds);
+    keepaliveSeconds = seconds;
+  }
+  keepalive.currentTime = offset;
   keepalive.play().catch(() => { /* not allowed outside a gesture; harmless */ });
 }
 function keepaliveStop() {
   if (keepalive) keepalive.pause();
+}
+function keepaliveSeek(to) {
+  if (keepalive && !keepalive.paused) keepalive.currentTime = to;
 }
 
 let songs = [];
@@ -407,6 +425,7 @@ function seek(to) {
   playing = false;
   offset = Math.max(0, Math.min(duration, to));
   if (wasPlaying) startSources(offset);
+  keepaliveSeek(offset);
   mediaSessionPosition();
 }
 
