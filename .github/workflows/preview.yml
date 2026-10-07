@@ -1,0 +1,29 @@
+# Deploys a preview of each pull request to
+# https://weitzman.github.io/splitopen/pr-preview/pr-<number>/
+# and posts the link as a sticky PR comment. The preview is removed when
+# the PR closes. Previews live under pr-preview/ on the gh-pages branch,
+# which deploy.yml keeps in sync with main.
+name: Deploy PR preview
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, closed]
+
+concurrency: preview-${{ github.ref }}
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  deploy-preview:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Deploy preview
+        uses: rossjrw/pr-preview-action@v1
+        with:
+          source-dir: .
+          preview-branch: gh-pages
+          umbrella-dir: pr-preview

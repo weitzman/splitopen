@@ -8,7 +8,7 @@
     "venue": "Coca-Cola Starplex Amphitheater",
     "city": "Dallas, TX",
     "source": "Soundboard",
-    "dir": "../audio/songs/1998-07-26-funky-bitch/"
+    "dir": "audio/songs/1998-07-26-funky-bitch/"
   },
   {
     "id": "1993-03-22-mikes-song",
@@ -19,7 +19,7 @@
     "venue": "Crest Theater",
     "city": "Sacramento, CA",
     "source": "Soundboard",
-    "dir": "../audio/songs/1993-03-22-mikes-song/"
+    "dir": "audio/songs/1993-03-22-mikes-song/"
   },
   {
     "id": "1997-03-29-wonderin",
@@ -30,6 +30,6 @@
     "venue": "Warfield Theater",
     "city": "San Francisco, CA",
     "source": "Soundboard",
-    "dir": "../audio/songs/1997-03-29-wonderin/"
+    "dir": "audio/songs/1997-03-29-wonderin/"
   }
 ]
