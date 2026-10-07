@@ -64,13 +64,6 @@ body {
   font-size: 20px;
   letter-spacing: 0.04em;
 }
-.eyebrow {
-  color: var(--gold);
-  font-weight: 700;
-  font-size: 12px;
-  letter-spacing: 0.25em;
-  text-transform: uppercase;
-}
 h1 {
   font-family: Righteous, Inter, sans-serif;
   font-size: clamp(40px, 8vw, 72px);
@@ -121,6 +114,7 @@ h1 {
 
 .strip {
   --c: var(--gold);
+  container-type: inline-size;
   background: var(--panel);
   border: 2px solid var(--c);
   border-radius: 12px;
@@ -208,8 +202,9 @@ h1 {
 .btn {
   font: 700 13px Inter, sans-serif;
   letter-spacing: 0.05em;
-  width: 44px;
+  min-width: 44px;
   height: 34px;
+  padding: 0 12px;
   border-radius: 8px;
   border: 1px solid var(--line);
   background: rgba(255,255,255,0.06);
@@ -219,32 +214,47 @@ h1 {
 .btn:hover { background: rgba(255,255,255,0.12); }
 .btn.mute.on { background: var(--donut); border-color: var(--donut); color: #fff; }
 .btn.solo.on { background: var(--gold); border-color: var(--gold); color: #1a1200; }
+/* M / S become Mute / Solo once the strip is wide enough to hold the words. */
+.btn .long { display: none; }
+@container (min-width: 170px) {
+  .btn .short { display: none; }
+  .btn .long { display: inline; }
+}
 
-/* Small viewports: no faders, just a compact row per stem with M / S. */
+/* Small viewports: everything is squeezed so the mixer and Play fit above
+   the fold without scrolling. Each stem is one compact row (name, instrument,
+   M / S) with the meter as a thin bar along the strip's bottom edge; faders
+   are dropped. The transport is fixed to the bottom of the screen, and the
+   app is padded so the footer can still scroll out from under it. */
 @media (max-width: 720px) {
-  .mixer { grid-template-columns: 1fr; gap: 8px; }
+  .app { gap: 12px; padding-bottom: 92px; }
+  .help > span { display: none; } /* keyboard shortcuts mean nothing on a touch screen */
+  .show { padding-top: 0; }
+  h1 { margin: 0 0 4px; }
+  .songs { margin-top: 10px; }
+  .mixer { grid-template-columns: 1fr; gap: 6px; }
   .strip {
-    display: grid;
-    grid-template-columns: 1fr auto;
-    grid-template-areas:
-      "who buttons"
-      "inst buttons"
-      "meter meter";
+    position: relative;
+    flex-direction: row;
     align-items: center;
-    column-gap: 12px;
-    row-gap: 4px;
-    padding: 10px 12px 10px;
+    gap: 10px;
+    padding: 7px 10px 10px 12px;
   }
-  .strip .who { grid-area: who; font-size: 20px; }
-  .strip .inst { grid-area: inst; }
-  .strip .buttons { grid-area: buttons; }
+  .strip .who { font-size: 20px; }
+  .strip .inst { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .fader-wrap { display: none; }
-  .meter-fader { grid-area: meter; height: 6px; margin-top: 4px; }
+  .meter-fader {
+    position: absolute;
+    left: 10px;
+    right: 10px;
+    bottom: 3px;
+    height: 3px;
+  }
   .meter {
     width: 100%;
     flex-direction: row;
     justify-content: flex-start;
-    border-radius: 3px;
+    border-radius: 2px;
   }
   .meter-fill {
     height: 100%;
@@ -306,7 +316,14 @@ h1 {
 .btn.share.copied .icon-check { display: block; }
 .btn.share.failed { color: var(--donut); }
 @media (max-width: 720px) {
-  .transport { gap: 10px 12px; padding: 12px; }
+  .transport {
+    position: fixed;
+    left: 16px;
+    right: 16px;
+    bottom: 12px;
+    gap: 10px 12px;
+    padding: 12px;
+  }
 }
 
 .help {
