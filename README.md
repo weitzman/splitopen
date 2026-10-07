@@ -36,7 +36,7 @@ in full between tips; when the playhead reaches a tip its note is shown. The
 Spotlight guide under the song list is built in: each player alone in turn,
 then everyone together.
 
-To write one, press **+ New guide** under the song list (or **Copy & edit**
+To write one, press **+ New guide** under the song title (or **Copy & edit**
 on an open guide to start from a copy of it), play the song, set mute/solo, and press `N` (or
 **Tip: Start**) where a passage worth a tip begins. The tip takes that
 moment and the mix in force, and runs to the next tip unless given an end.

@@ -554,6 +554,10 @@ function seek(to) {
   mediaSessionPosition();
 }
 
+function sheetOpen() {
+  return !!((ui.mixSheet && ui.mixSheet.open) || (ui.songSheet && ui.songSheet.open));
+}
+
 // Keys typed into a text field belong to the field, not the player.
 function isTyping(el) {
   if (!el) return false;
@@ -566,7 +570,7 @@ function isTyping(el) {
 // bar from stepping as well.
 function wireNudgeKeys() {
   document.addEventListener('keydown', e => {
-    if (isTyping(e.target) || (ui.mixSheet && ui.mixSheet.open)) return;
+    if (isTyping(e.target) || sheetOpen()) return;
     if (!channels.length || e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return;
     if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
     e.preventDefault();
@@ -1649,8 +1653,9 @@ function wireTransport() {
   wireNudgeKeys();
 
   document.addEventListener('keydown', e => {
-    if (isTyping(e.target) || (ui.mixSheet && ui.mixSheet.open)) return;
+    if (isTyping(e.target) || sheetOpen()) return;
     if (e.target.tagName === 'INPUT') e.target.blur(); // a focused fader or the seek bar
+    if (e.key === '/' && !e.metaKey && !e.ctrlKey && !e.altKey) { e.preventDefault(); openSongPicker(); return; }
     if (!channels.length) return;
     if (e.code === 'Space') { e.preventDefault(); playing ? pause() : play(); return; }
     if (e.code === 'KeyL' && !e.metaKey && !e.ctrlKey && !e.altKey) { shareLink(); return; }
@@ -1717,28 +1722,103 @@ function renderHeader() {
   document.getElementById('venue').textContent = `${song.date} · ${song.venue} · ${song.city}`;
   document.title = `Split Open — ${song.title}`;
   renderGuideChips();
-  for (const btn of document.querySelectorAll('.song.in-list')) {
-    btn.classList.toggle('on', btn.dataset.id === song.id);
+  for (const row of document.querySelectorAll('.song-row')) {
+    row.classList.toggle('on', row.dataset.id === song.id);
   }
   mediaSessionMetadata();
 }
 
-function renderSongList() {
-  const nav = document.getElementById('songs');
-  nav.innerHTML = '';
+// ---------- song picker ----------
+//
+// The title is the picker: it opens a sheet listing every song grouped by
+// band, with a search box that filters by title, band, venue, city or
+// date. Picking one sets the hash, as the old chips did.
+
+function renderSongList(filter = '') {
+  const list = document.getElementById('song-list');
+  list.innerHTML = '';
+  const q = filter.trim().toLowerCase();
+  const byBand = new Map();
   for (const s of songs) {
-    const btn = document.createElement('button');
-    btn.className = 'song in-list';
-    btn.dataset.id = s.id;
     const who = (bands[s.band] || {}).name || s.band;
-    btn.innerHTML = `${s.title}<small>${who}</small>`;
-    btn.addEventListener('click', () => {
-      if (song && s.id === song.id) return;
-      if (!leaveDraftOk()) return;
-      location.hash = s.id;
-    });
-    nav.appendChild(btn);
+    const hay = `${s.title} ${who} ${s.venue} ${s.city} ${s.date}`.toLowerCase();
+    if (q && !hay.includes(q)) continue;
+    if (!byBand.has(who)) byBand.set(who, []);
+    byBand.get(who).push(s);
   }
+  if (!byBand.size) {
+    const none = document.createElement('p');
+    none.className = 'song-none';
+    none.textContent = 'No songs match.';
+    list.appendChild(none);
+    return;
+  }
+  for (const [who, group] of byBand) {
+    const h = document.createElement('h3');
+    h.className = 'song-band';
+    h.textContent = who;
+    list.appendChild(h);
+    for (const s of group) {
+      const row = document.createElement('button');
+      row.className = 'song-row';
+      row.dataset.id = s.id;
+      row.classList.toggle('on', !!song && s.id === song.id);
+      row.innerHTML = `<span class="song-title"></span><span class="song-where"></span>`;
+      row.querySelector('.song-title').textContent = s.title;
+      row.querySelector('.song-where').textContent = `${s.date} · ${s.venue}, ${s.city}`;
+      row.addEventListener('click', () => {
+        ui.songSheet.close();
+        if (song && s.id === song.id) return;
+        if (!leaveDraftOk()) return;
+        location.hash = s.id;
+      });
+      list.appendChild(row);
+    }
+  }
+}
+
+function openSongPicker() {
+  if (!songs.length || ui.songSheet.open) return;
+  ui.songSearch.value = '';
+  renderSongList();
+  ui.songSheet.showModal();
+  // showModal() focuses the first field, the search box. That is right
+  // where a keyboard is at hand; on a phone it would raise the keyboard
+  // over the list, so focus goes to the sheet itself instead.
+  if (matchMedia('(hover: none) and (pointer: coarse)').matches) ui.songSheet.focus();
+  else ui.songSearch.focus();
+  const on = ui.songSheet.querySelector('.song-row.on');
+  if (on) on.scrollIntoView({ block: 'center' });
+}
+
+function wireSongPicker() {
+  ui.songSheet = document.getElementById('song-sheet');
+  ui.songSearch = document.getElementById('song-search');
+  document.getElementById('song-pick').addEventListener('click', openSongPicker);
+  ui.songSearch.addEventListener('input', () => renderSongList(ui.songSearch.value));
+  ui.songSheet.addEventListener('click', e => { if (e.target === ui.songSheet) ui.songSheet.close(); });
+  // Up and Down walk the list (from the search box, Down goes to the first
+  // song and Up to the last); Enter in the search box picks the first match.
+  ui.songSheet.addEventListener('keydown', e => {
+    if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp' && e.key !== 'Enter') return;
+    const rows = Array.from(ui.songSheet.querySelectorAll('.song-row'));
+    if (!rows.length) return;
+    const i = rows.indexOf(document.activeElement);
+    if (e.key === 'Enter') {
+      if (document.activeElement === ui.songSearch) { e.preventDefault(); rows[0].click(); }
+      return;
+    }
+    e.preventDefault();
+    let next;
+    if (i < 0) next = e.key === 'ArrowDown' ? 0 : rows.length - 1;
+    else next = (i + (e.key === 'ArrowDown' ? 1 : -1) + rows.length) % rows.length;
+    rows[next].focus();
+    rows[next].scrollIntoView({ block: 'nearest' });
+  });
+  // The pill on the title says how many songs there are to choose from.
+  const pill = document.getElementById('pick-pill');
+  document.getElementById('pick-count').textContent = songs.length + (songs.length === 1 ? ' song' : ' songs');
+  pill.hidden = false;
 }
 
 // ---------- song switching ----------
@@ -1812,7 +1892,7 @@ async function loadSong(state) {
     document.getElementById('loading-label').textContent = 'Failed to load song list: ' + err.message;
     return;
   }
-  renderSongList();
+  wireSongPicker();
   const fromHash = () => loadSong(parseHash());
   window.addEventListener('hashchange', () => {
     // Our own replaceState writes never fire this, so it is a song click, a
