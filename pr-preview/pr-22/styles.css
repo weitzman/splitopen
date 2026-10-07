@@ -1,0 +1,649 @@
+:root {
+  --bg: #0b1026;
+  --bg-2: #141b3a;
+  --panel: rgba(20, 27, 58, 0.85);
+  --line: rgba(255, 255, 255, 0.08);
+  --text: #f4efe6;
+  --muted: #9aa0b8;
+  --donut: #d7263d;
+  --gold: #f2b134;
+  --trey: #ff6b35;
+  --mike: #3dd6a3;
+  --page: #a66cff;
+  --fish: #d7263d;
+  --vox: #f2b134;
+}
+
+* { box-sizing: border-box; }
+
+html, body { margin: 0; min-height: 100%; }
+
+body {
+  background: radial-gradient(1200px 600px at 50% -10%, var(--bg-2), var(--bg) 70%);
+  color: var(--text);
+  font-family: Inter, system-ui, -apple-system, sans-serif;
+  padding: 16px;
+  overflow-x: hidden;
+}
+
+/* Backdrop: the Fishman-dress donut field, each ring in one of the five stem colors
+   with a faint outer halo, at uniform strength. The tile holds one ring per color
+   (320px = 5 x 64px). */
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.07;
+  background: url(bg-rings.svg) 0 0 / 320px 64px repeat;
+}
+
+.app {
+  position: relative;
+  z-index: 1;
+  max-width: 1040px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.show { text-align: center; padding-top: 12px; }
+.logo {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: -8px;
+  color: var(--text);
+  text-decoration: none;
+}
+.logo-mark { width: 44px; height: 28px; }
+.logo-text {
+  font-family: "Space Grotesk", Inter, sans-serif;
+  font-weight: 700;
+  font-size: 21px;
+  letter-spacing: -0.01em;
+}
+h1 {
+  font-family: "Space Grotesk", Inter, sans-serif;
+  font-weight: 700;
+  font-size: clamp(40px, 8vw, 76px);
+  letter-spacing: -0.03em;
+  line-height: 1;
+  margin: 6px 0 8px;
+  color: var(--text);
+  text-shadow: 0 0 24px rgba(242, 177, 52, 0.25);
+}
+.venue { color: var(--muted); font-size: 14px; }
+
+.songs {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 16px;
+}
+.song {
+  font: 600 13px Inter, sans-serif;
+  padding: 8px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: rgba(255,255,255,0.06);
+  color: var(--text);
+  cursor: pointer;
+}
+.song:hover { background: rgba(255,255,255,0.12); }
+.song.on { background: var(--gold); border-color: var(--gold); color: #1a1200; }
+.song small { opacity: 0.7; font-weight: 400; margin-left: 6px; }
+
+/* Guides for this song: a labeled row of chips in the song-list style. */
+.guides {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+.guides:empty { display: none; }
+.guides-label {
+  color: var(--muted);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  margin-right: 4px;
+}
+
+.loading { text-align: center; color: var(--muted); font-size: 14px; }
+.loading-bar {
+  margin: 10px auto 0;
+  max-width: 420px;
+  height: 6px;
+  background: var(--line);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.loading-fill { height: 100%; width: 0%; background: var(--gold); transition: width 0.15s; }
+
+/* Mixer */
+.mixer[hidden] { display: none; }
+.mixer {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.strip {
+  --c: var(--gold);
+  container-type: inline-size;
+  background: var(--panel);
+  border: 2px solid var(--c);
+  border-radius: 12px;
+  padding: 14px 12px 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  transition: opacity 0.15s;
+}
+.strip.inactive { opacity: 0.45; }
+
+.strip .who {
+  font-family: "Space Grotesk", Inter, sans-serif;
+  font-weight: 700;
+  font-size: 23px;
+  letter-spacing: -0.02em;
+  color: var(--c);
+  line-height: 1;
+}
+.strip .inst {
+  font-size: 12px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+}
+
+.meter-fader {
+  display: flex;
+  gap: 10px;
+  align-items: stretch;
+  height: 180px;
+}
+.meter {
+  width: 10px;
+  background: rgba(0,0,0,0.4);
+  border-radius: 5px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+}
+.meter-fill {
+  width: 100%;
+  height: var(--lvl, 0%);
+  background: linear-gradient(to top, var(--c), var(--gold) 80%, var(--donut));
+  transition: height 0.05s linear, width 0.05s linear;
+}
+
+/* Vertical fader: rotate a horizontal range */
+.fader-wrap { width: 32px; position: relative; }
+.fader {
+  -webkit-appearance: none;
+  appearance: none;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 180px;
+  height: 32px;
+  margin: 0;
+  transform: translate(-50%, -50%) rotate(-90deg);
+  background: transparent;
+  cursor: pointer;
+}
+.fader::-webkit-slider-runnable-track {
+  height: 6px;
+  background: rgba(255,255,255,0.15);
+  border-radius: 3px;
+}
+.fader::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 18px;
+  height: 28px;
+  margin-top: -11px;
+  border-radius: 4px;
+  background: var(--c);
+  border: 2px solid var(--bg);
+  box-shadow: 0 2px 6px rgba(0,0,0,0.5);
+}
+.fader::-moz-range-track { height: 6px; background: rgba(255,255,255,0.15); border-radius: 3px; }
+.fader::-moz-range-thumb {
+  width: 18px; height: 28px; border-radius: 4px;
+  background: var(--c); border: 2px solid var(--bg);
+}
+
+.buttons { display: flex; gap: 8px; }
+.btn {
+  font: 700 13px Inter, sans-serif;
+  letter-spacing: 0.05em;
+  min-width: 44px;
+  height: 34px;
+  padding: 0 12px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: rgba(255,255,255,0.06);
+  color: var(--text);
+  cursor: pointer;
+}
+.btn:hover { background: rgba(255,255,255,0.12); }
+.btn.mute.on { background: var(--donut); border-color: var(--donut); color: #fff; }
+.btn.solo.on { background: var(--gold); border-color: var(--gold); color: #1a1200; }
+/* M / S become Mute / Solo once the strip is wide enough to hold the words.
+   The two labeled buttons plus their gap come to about 126px; the query is
+   against the strip's content box, which is 170px at the full 1040px app
+   width and shrinks with the window. */
+.btn .long { display: none; }
+@container (min-width: 130px) {
+  .btn .short { display: none; }
+  .btn .long { display: inline; }
+}
+
+/* Small viewports: everything is squeezed so the mixer and Play fit above
+   the fold without scrolling. Each stem is one compact row (name, instrument,
+   M / S) with the meter as a thin bar along the strip's bottom edge; faders
+   are dropped. The transport is fixed to the bottom of the screen, and the
+   app is padded so the footer can still scroll out from under it. */
+@media (max-width: 720px) {
+  .app { gap: 12px; padding-bottom: 92px; }
+  .help > span { display: none; } /* keyboard shortcuts mean nothing on a touch screen */
+  /* Everything else in the header is centered, and the phone gap is tight,
+     so the logo joins the centered column and keeps clear of the title. */
+  .logo { align-self: center; margin-bottom: 0; }
+  .show { padding-top: 0; }
+  h1 { margin: 0 0 4px; }
+  .songs { margin-top: 10px; }
+  .mixer { grid-template-columns: 1fr; gap: 6px; }
+  .strip {
+    position: relative;
+    flex-direction: row;
+    align-items: center;
+    gap: 10px;
+    padding: 7px 10px 10px 12px;
+  }
+  .strip .who { font-size: 20px; }
+  .strip .inst { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .fader-wrap { display: none; }
+  .meter-fader {
+    position: absolute;
+    left: 10px;
+    right: 10px;
+    bottom: 3px;
+    height: 3px;
+  }
+  .meter {
+    width: 100%;
+    flex-direction: row;
+    justify-content: flex-start;
+    border-radius: 2px;
+  }
+  .meter-fill {
+    height: 100%;
+    width: var(--lvl, 0%);
+    background: linear-gradient(to right, var(--c), var(--gold) 80%, var(--donut));
+  }
+}
+
+/* Guide panel: the current note up top, the list of tips beneath. */
+.guide[hidden] { display: none; }
+.guide {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.guide-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+.guide-kicker {
+  color: var(--gold);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+}
+.guide-title {
+  font-family: "Space Grotesk", Inter, sans-serif;
+  font-size: 18px;
+  flex: 1 0 auto; /* never squeezed; on a phone the controls wrap below */
+}
+.guide-by { color: inherit; }
+a.guide-by { text-decoration: underline; text-underline-offset: 3px; }
+a.guide-by:hover { color: var(--gold); }
+/* Edit / Save keeps one spot, beside the close button, in every mode. */
+.btn.guide-edit { margin-left: auto; }
+.btn.guide-edit[hidden] + .btn.guide-close { margin-left: auto; }
+.btn.guide-close {
+  min-width: 34px;
+  padding: 0;
+  font-size: 20px;
+  line-height: 1;
+  color: var(--muted);
+}
+.guide-status { margin: 0; color: var(--muted); font-size: 14px; }
+.guide-status.error { color: var(--donut); }
+.guide-status .inline-icon { width: 15px; height: 15px; vertical-align: -3px; }
+.guide-status[hidden] { display: none; }
+.guide-head .btn[hidden] { display: none; }
+
+/* Writing a guide: one editable card per tip. */
+.edit-row input[type="text"], .edit-note {
+  min-width: 0;
+  padding: 6px 8px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: rgba(0,0,0,0.25);
+  color: var(--text);
+  font: 14px Inter, sans-serif;
+}
+.edit-row input:focus, .edit-note:focus { outline: 1px solid var(--gold); }
+.guide.editing .guide-tips { max-height: 60vh; }
+.guide-tips li.edit {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 6px;
+  border-radius: 8px;
+  color: var(--muted);
+}
+.guide-tips li.edit.on { background: rgba(255,255,255,0.05); color: var(--text); }
+.edit-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+  font-size: 13px;
+}
+.edit-row .span { display: inline-flex; align-items: center; gap: 4px; }
+.edit-row .at, .edit-row .to { width: 4.5em; font-variant-numeric: tabular-nums; text-align: center; }
+.edit-row .to:disabled { color: var(--muted); }
+.edit-row .mix { color: var(--text); }
+.edit-row .mix .who { font-family: "Space Grotesk", Inter, sans-serif; font-size: 15px; }
+.edit-row .spacer { flex: 1; }
+.handle {
+  cursor: grab;
+  color: var(--muted);
+  font-size: 16px;
+  letter-spacing: -4px;
+  padding: 0 4px 0 0;
+  user-select: none;
+  touch-action: none;
+}
+.guide-tips li.dragging { opacity: 0.6; background: rgba(242, 177, 52, 0.12); }
+.guide-tips li.dragging .handle { cursor: grabbing; }
+.guide-tips li.pending { border-left: 2px solid var(--gold); }
+
+/* Describing: one card per tip, the passage on top, the description below. */
+.guide.describing .guide-tips { max-height: none; }
+.guide-tips li.card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 10px;
+  margin: 6px 0;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: rgba(0,0,0,0.18);
+  color: var(--text);
+}
+.guide-tips li.card.looping { border-color: var(--gold); box-shadow: 0 0 10px rgba(242, 177, 52, 0.25); }
+.card-head { display: flex; align-items: center; gap: 10px; font-size: 14px; }
+.card-head .mix .who { font-family: "Space Grotesk", Inter, sans-serif; font-size: 16px; }
+.card-head .span { color: var(--muted); font-variant-numeric: tabular-nums; }
+.mini.loop { width: 32px; height: 32px; padding: 0; border-radius: 50%; }
+li.looping .mini.loop { background: var(--gold); border-color: var(--gold); color: #1a1200; }
+.btn.guide-add.pending { background: var(--gold); border-color: var(--gold); color: #1a1200; }
+.mini {
+  height: 28px;
+  min-width: 28px;
+  padding: 0 8px;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  background: rgba(255,255,255,0.06);
+  color: var(--text);
+  font: 600 12px Inter, sans-serif;
+  cursor: pointer;
+}
+.mini:hover { background: rgba(255,255,255,0.12); }
+.edit-note { width: 100%; resize: vertical; line-height: 1.4; }
+.song.chip.new { background: none; border-style: dashed; color: var(--muted); }
+.song.chip.new:hover { color: var(--text); }
+
+/* Long notes are clamped to a few lines, with a "more" link that shows the
+   rest; the link only appears when there is more. */
+.note.clamp {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: var(--lines, 2);
+  line-clamp: var(--lines, 2);
+  overflow: hidden;
+}
+.more {
+  border: none;
+  background: none;
+  padding: 0;
+  color: var(--gold);
+  font: 600 13px Inter, sans-serif;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.more[hidden] { display: none; }
+.guide-tips li { display: flex; flex-wrap: wrap; }
+.guide-tips .more { margin: -4px 0 6px 54px; } /* under the text, clear of the time column */
+.btn.continue {
+  align-self: flex-start;
+  background: var(--gold);
+  border-color: var(--gold);
+  color: #1a1200;
+}
+.guide-tips {
+  position: relative; /* so each tip's offsetTop is measured from the list */
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 240px;
+  overflow-y: auto;
+}
+.guide-tips .tip {
+  display: flex;
+  gap: 12px;
+  align-items: baseline;
+  flex: 1 0 100%;
+  min-width: 0;
+  padding: 7px 6px;
+  border: none;
+  background: none;
+  color: var(--muted);
+  font: 14px Inter, sans-serif;
+  text-align: left;
+  cursor: pointer;
+  border-radius: 6px;
+}
+.guide-tips .tip:hover { background: rgba(255,255,255,0.06); color: var(--text); }
+.guide-tips li.on .tip { color: var(--text); }
+.guide-tips .tip .body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.guide-tips .tip .mix { font-size: 13px; }
+.guide-tips .tip .mix .who { font-family: "Space Grotesk", Inter, sans-serif; font-size: 14px; }
+.guide-tips li.on .tip time { color: var(--gold); }
+.guide-tips time {
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+  min-width: 36px;
+}
+
+/* Transport */
+.transport {
+  position: sticky;
+  bottom: 12px;
+  z-index: 2;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.45);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 12px 16px;
+}
+.play {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  border: none;
+  background: var(--gold);
+  color: #1a1200;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+.play svg { width: 24px; height: 24px; fill: currentColor; }
+.play .icon-pause { display: none; }
+.play.playing .icon-play { display: none; }
+.play.playing .icon-pause { display: block; }
+
+.time { font-variant-numeric: tabular-nums; color: var(--muted); font-size: 14px; min-width: 44px; text-align: center; }
+.seek-wrap { flex: 1; min-width: 0; position: relative; display: flex; align-items: center; }
+.seek { flex: 1; min-width: 0; accent-color: var(--gold); cursor: pointer; }
+/* Guide tips are marked over the seek bar: a span for the passage (a tick
+   when it runs to the next tip), each with its note as a tooltip; clicking
+   one jumps to the tip. The row is inset by half the thumb so the marks
+   line up with where the thumb lands. */
+.marks {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  top: 50%;
+  height: 12px;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+.marks i {
+  position: absolute;
+  top: 0;
+  width: 2px;
+  height: 100%;
+  margin-left: -1px;
+  background: var(--gold);
+  opacity: 0.6;
+  border-radius: 1px;
+  cursor: pointer;
+  pointer-events: auto;
+}
+.marks i::before { /* a wider hit area than the tick itself */
+  content: '';
+  position: absolute;
+  inset: -4px -5px;
+}
+.marks i:hover, .marks i.on { opacity: 1; }
+/* Share icon, in the style of GitHub's small clipboard buttons. Where there
+   is no share sheet the link is copied instead, and the glyph gives way to a
+   check for a moment, or turns red if the copy failed. */
+.btn.share {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+}
+.btn.share:hover { color: var(--text); }
+.btn.share svg { width: 18px; height: 18px; }
+.btn.share .icon-check { display: none; width: 16px; height: 16px; fill: currentColor; }
+.btn.share.copied { color: var(--gold); }
+.btn.share.copied .icon-share { display: none; }
+.btn.share.copied .icon-check { display: block; }
+.btn.share.failed { color: var(--donut); }
+@media (max-width: 720px) {
+  .transport {
+    position: fixed;
+    left: 16px;
+    right: 16px;
+    bottom: 12px;
+    gap: 10px 12px;
+    padding: 12px;
+  }
+}
+
+.help {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 18px;
+  color: var(--muted);
+  font-size: 12px;
+  padding-bottom: 16px;
+}
+.colophon {
+  flex-basis: 100%;
+  margin: 6px 0 0;
+  text-align: center;
+  font-style: italic;
+  opacity: 0.8;
+}
+.colophon a {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.colophon a:hover {
+  color: var(--text);
+}
+/* Touch-only devices have no keyboard, so the shortcut legend is noise there. */
+@media (hover: none) and (pointer: coarse) {
+  .help > span { display: none; }
+  .colophon { margin-top: 0; }
+}
+kbd {
+  font-family: inherit;
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--line);
+  background: rgba(255,255,255,0.06);
+}
+
+/* First-run hints: a soft pulse on Play while paused, and on one S button
+   while playing (until the listener has used solo or mute). */
+.play.hint {
+  animation: play-pulse 2.2s ease-out infinite;
+}
+@keyframes play-pulse {
+  0%   { box-shadow: 0 0 0 0 rgba(242, 177, 52, 0.55); }
+  70%  { box-shadow: 0 0 0 14px rgba(242, 177, 52, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(242, 177, 52, 0); }
+}
+
+.btn.solo.hint {
+  animation: solo-glow 2.4s ease-in-out infinite;
+}
+
+/* While describing, Save is the way out, so it pulses the way Play does. */
+.guide.describing .btn.guide-edit {
+  animation: play-pulse 2.2s ease-out infinite;
+}
+@keyframes solo-glow {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255,255,255,0); border-color: var(--line); }
+  50%      { box-shadow: 0 0 8px color-mix(in srgb, var(--c) 45%, transparent); border-color: color-mix(in srgb, var(--c) 60%, var(--line)); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .play.hint, .guide.describing .btn.guide-edit { animation: none; box-shadow: 0 0 0 4px rgba(242, 177, 52, 0.35); }
+  .btn.solo.hint { animation: none; box-shadow: 0 0 8px color-mix(in srgb, var(--c) 45%, transparent); }
+}
