@@ -346,7 +346,7 @@ function writeHash() {
   if (h !== location.hash) history.replaceState(null, '', h);
 }
 
-// Position goes into the hash only on seek, pause, or Copy link, never from
+// Position goes into the hash only on seek, pause, or Share, never from
 // the animation frame.
 function writePosition() {
   hashPos = position();
@@ -502,6 +502,18 @@ function seek(to) {
   ui.cur.textContent = fmt(offset);
 }
 
+// Left and Right arrows step the playhead 5 s either way, through seek() so
+// the play state is kept. preventDefault stops a focused fader or the seek
+// bar from stepping as well.
+function wireNudgeKeys() {
+  document.addEventListener('keydown', e => {
+    if (!channels.length || e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return;
+    if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+    e.preventDefault();
+    seek(position() + (e.key === 'ArrowLeft' ? -5 : 5));
+  });
+}
+
 // ---------- UI ----------
 
 const ui = {};
@@ -574,10 +586,10 @@ function wireTransport() {
   ui.seek = document.getElementById('seek');
   ui.cur = document.getElementById('time-cur');
   ui.dur = document.getElementById('time-dur');
-  ui.link = document.getElementById('copy-link');
+  ui.share = document.getElementById('share');
 
   ui.play.addEventListener('click', () => playing ? pause() : play());
-  ui.link.addEventListener('click', copyLink);
+  ui.share.addEventListener('click', shareLink);
   ui.seek.addEventListener('pointerdown', () => { ui.seeking = true; });
   ui.seek.addEventListener('input', () => {
     ui.cur.textContent = fmt(ui.seek.value / 1000 * duration);
@@ -587,13 +599,13 @@ function wireTransport() {
     seek(ui.seek.value / 1000 * duration);
     writePosition();
   });
+  wireNudgeKeys();
 
   document.addEventListener('keydown', e => {
     if (e.target.tagName === 'INPUT') e.target.blur();
     if (!channels.length) return;
     if (e.code === 'Space') { e.preventDefault(); playing ? pause() : play(); return; }
-    if (e.code === 'KeyL' && !e.metaKey && !e.ctrlKey && !e.altKey) { copyLink(); return; }
-    if (e.key === '0') { channels.forEach(c => { c.solo = false; }); applyMuteSolo(); return; }
+    if (e.code === 'KeyL' && !e.metaKey && !e.ctrlKey && !e.altKey) { shareLink(); return; }
     const n = Number(e.code.replace('Digit', ''));
     if (e.code.startsWith('Digit') && n >= 1 && n <= channels.length) {
       const c = channels[n - 1];
@@ -620,22 +632,35 @@ function copyViaSelection(text) {
   return ok;
 }
 
-// Copies a link to the current mix at the current moment, so the position is
-// committed to the hash first.
-let linkTimer = null;
-async function copyLink() {
+// Shares a link to the current mix at the current moment, so the position is
+// committed to the hash first. Where the browser has a share sheet (iOS and
+// Android, Safari and Chrome on the desktop) it opens with the link; the call
+// has to happen inside the click or key gesture, before any await. Elsewhere
+// the link is copied to the clipboard. Dismissing the sheet is not a failure.
+let shareTimer = null;
+async function shareLink() {
   if (!channels.length) return;
   writePosition();
+  const url = location.href;
+  if (navigator.share) {
+    try {
+      await navigator.share({ title: document.title, url });
+      return;
+    } catch (err) {
+      if (err && err.name === 'AbortError') return;
+    }
+  }
   let ok = false;
   try {
-    await navigator.clipboard.writeText(location.href);
+    await navigator.clipboard.writeText(url);
     ok = true;
   } catch (_) {
-    ok = copyViaSelection(location.href);
+    ok = copyViaSelection(url);
   }
-  ui.link.textContent = ok ? 'Copied' : 'Copy failed';
-  clearTimeout(linkTimer);
-  linkTimer = setTimeout(() => { ui.link.textContent = 'Copy link'; }, 1500);
+  ui.share.classList.toggle('copied', ok);
+  ui.share.classList.toggle('failed', !ok);
+  clearTimeout(shareTimer);
+  shareTimer = setTimeout(() => { ui.share.classList.remove('copied', 'failed'); }, 1500);
 }
 
 function renderHeader() {

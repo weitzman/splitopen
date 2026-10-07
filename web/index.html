@@ -67,15 +67,17 @@
     <div class="time" id="time-cur">0:00</div>
     <input class="seek" id="seek" type="range" min="0" max="1000" value="0" step="1" aria-label="Seek">
     <div class="time" id="time-dur">0:00</div>
-    <button class="btn link" id="copy-link" title="Copy a link to this mix and moment (L)">Copy link</button>
+    <button class="btn share" id="share" title="Share a link to this mix and moment (L)" aria-label="Share mix">
+      <svg class="icon-share" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 10H6.5A1.5 1.5 0 0 0 5 11.5v8A1.5 1.5 0 0 0 6.5 21h11a1.5 1.5 0 0 0 1.5-1.5v-8a1.5 1.5 0 0 0-1.5-1.5H16"/><path d="M12 15V3M8 7l4-4 4 4"/></svg>
+      <svg class="icon-check" viewBox="0 0 16 16" aria-hidden="true"><path d="M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0Z"/></svg>
+    </button>
   </section>
 
   <footer class="help">
     <span><kbd>space</kbd> play / pause</span>
     <span><kbd>1</kbd>–<kbd>5</kbd> solo</span>
-    <span><kbd>shift</kbd>+<kbd>1</kbd>–<kbd>5</kbd> mute</span>
-    <span><kbd>0</kbd> clear solos</span>
-    <span><kbd>L</kbd> copy link</span>
+    <span><kbd>←</kbd> <kbd>→</kbd> ±5 s</span>
+    <span><kbd>L</kbd> share mix</span>
     <p class="colophon">Split Open so we can learn and appreciate. Made with love by <a href="https://weitzman.github.io">Moshe Weitzman</a>.</p>
   </footer>
 </main>
