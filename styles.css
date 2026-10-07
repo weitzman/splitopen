@@ -60,13 +60,16 @@ body {
 }
 .logo-mark { width: 44px; height: 28px; }
 .logo-text {
-  font-family: Righteous, Inter, sans-serif;
-  font-size: 20px;
-  letter-spacing: 0.04em;
+  font-family: "Space Grotesk", Inter, sans-serif;
+  font-weight: 700;
+  font-size: 21px;
+  letter-spacing: -0.01em;
 }
 h1 {
-  font-family: Righteous, Inter, sans-serif;
-  font-size: clamp(40px, 8vw, 72px);
+  font-family: "Space Grotesk", Inter, sans-serif;
+  font-weight: 700;
+  font-size: clamp(40px, 8vw, 76px);
+  letter-spacing: -0.03em;
   line-height: 1;
   margin: 6px 0 8px;
   color: var(--text);
@@ -147,8 +150,10 @@ h1 {
 .strip.inactive { opacity: 0.45; }
 
 .strip .who {
-  font-family: Righteous, Inter, sans-serif;
-  font-size: 22px;
+  font-family: "Space Grotesk", Inter, sans-serif;
+  font-weight: 700;
+  font-size: 23px;
+  letter-spacing: -0.02em;
   color: var(--c);
   line-height: 1;
 }
