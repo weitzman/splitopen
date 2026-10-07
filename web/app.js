@@ -308,6 +308,7 @@ function applyMuteSolo() {
 // mix and the moment as &-separated key=value pairs:
 //   #1998-07-26-funky-bitch&solo=keys&mute=vocals&g=guitar:0.8,bass:1.2&t=312
 // Keys at their defaults are left out, so an untouched mix is just #songid.
+// guide= names a listening guide (see the guides section below).
 // The hash is rewritten with replaceState so Back still returns to the
 // previous song rather than stepping through every mute.
 
@@ -318,28 +319,39 @@ function findSong(id) {
   return songs.find(s => s.id === id) || songs[0];
 }
 
+function parseStemList(val) {
+  const slotIds = SLOTS.map(slot => slot.id);
+  return val.split(',').filter(id => slotIds.includes(id));
+}
+
+function parseGains(val) {
+  const slotIds = SLOTS.map(slot => slot.id);
+  const gains = {};
+  for (const item of val.split(',')) {
+    const [id, v] = item.split(':');
+    const n = Number(v);
+    if (slotIds.includes(id) && Number.isFinite(n)) gains[id] = Math.max(0, Math.min(GAIN_MAX, n));
+  }
+  return gains;
+}
+
 function parseHash() {
   const [idPart, ...pairs] = location.hash.slice(1).split('&');
-  const state = { id: decodeURIComponent(idPart), solo: [], mute: [], gains: {}, t: null };
-  const slotIds = SLOTS.map(slot => slot.id);
+  const state = { id: decodeURIComponent(idPart), solo: [], mute: [], gains: {}, t: null, guide: null };
   for (const pair of pairs) {
     const eq = pair.indexOf('=');
     if (eq < 0) continue;
     const key = pair.slice(0, eq);
     const val = decodeURIComponent(pair.slice(eq + 1));
     if (key === 'solo' || key === 'mute') {
-      state[key] = val.split(',').filter(id => slotIds.includes(id));
+      state[key] = parseStemList(val);
     } else if (key === 'g') {
-      for (const item of val.split(',')) {
-        const [id, v] = item.split(':');
-        const n = Number(v);
-        if (slotIds.includes(id) && Number.isFinite(n)) {
-          state.gains[id] = Math.max(0, Math.min(GAIN_MAX, n));
-        }
-      }
+      state.gains = parseGains(val);
     } else if (key === 't') {
       const n = Number(val);
       if (Number.isFinite(n) && n >= 0) state.t = n;
+    } else if (key === 'guide' && /^[\w-]+$/.test(val)) {
+      state.guide = val;
     }
   }
   return state;
@@ -358,6 +370,7 @@ function buildHash() {
   if (gains.length) parts.push('g=' + gains.join(','));
   const t = Math.round(hashPos || 0);
   if (t > 0) parts.push('t=' + t);
+  if (guideParam) parts.push('guide=' + guideParam);
   return '#' + parts.join('&');
 }
 
@@ -390,6 +403,7 @@ function applyMixState(state) {
     hashPos = offset;
   }
   applyMuteSolo();
+  guideSync(false);
 }
 
 // ---------- first-run hints ----------
@@ -448,8 +462,10 @@ function updateHints() {
 
 // ---------- transport ----------
 
+// Sources start 50 ms after play(), so for that moment the clock reads a
+// little behind the start offset; clamp so the position never steps back.
 function position() {
-  return playing ? Math.min(duration, offset + ctx.currentTime - startedAt) : offset;
+  return playing ? Math.max(offset, Math.min(duration, offset + ctx.currentTime - startedAt)) : offset;
 }
 
 function startSources(from) {
@@ -490,11 +506,13 @@ function setPlayButton(on) {
 async function play() {
   if (!channels.length) return;
   keepaliveStart(); // must be called synchronously inside the user gesture
+  guideWaiting = false;
   // Safari also reports 'interrupted' (phone call, backgrounding); resume covers both.
   if (ctx.state !== 'running') await ctx.resume();
   if (offset >= duration) offset = 0;
   startSources(offset);
   setPlayButton(true);
+  guideResume();
 }
 
 function pause() {
@@ -502,6 +520,7 @@ function pause() {
   stopSources();
   playing = false;
   keepaliveStop();
+  guideWaiting = false;
   setPlayButton(false);
   writePosition();
 }
@@ -535,6 +554,7 @@ function wireNudgeKeys() {
     if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
     e.preventDefault();
     seek(position() + (e.key === 'ArrowLeft' ? -5 : 5));
+    guideSync(true);
   });
 }
 
@@ -546,9 +566,9 @@ function wireNudgeKeys() {
 const MEDIA_ACTIONS = {
   play: () => play(),
   pause: () => pause(),
-  seekbackward: d => seek(position() - ((d && d.seekOffset) || 10)),
-  seekforward: d => seek(position() + ((d && d.seekOffset) || 10)),
-  seekto: d => { if (d && typeof d.seekTime === 'number') seek(d.seekTime); },
+  seekbackward: d => { seek(position() - ((d && d.seekOffset) || 10)); guideSync(true); },
+  seekforward: d => { seek(position() + ((d && d.seekOffset) || 10)); guideSync(true); },
+  seekto: d => { if (d && typeof d.seekTime === 'number') { seek(d.seekTime); guideSync(true); } },
   previoustrack: () => mediaSessionStep(-1),
   nexttrack: () => mediaSessionStep(1),
 };
@@ -622,6 +642,401 @@ function mediaSessionPosition() {
   } catch (_) { /* position outside duration */ }
 }
 
+// ---------- guides ----------
+//
+// A guide is a listening tour of a song: an ordered list of stops, each a
+// moment, a mix, and a note. The mix holds from the stop until the next one.
+// When the playhead crosses into a stop its note is shown; a stop marked
+// `pause` also stops the music until the listener presses Continue. The text
+// form is the format:
+//
+//   lang: en
+//   title: Spotlight
+//   by: Moshe Weitzman
+//   url: https://weitzman.github.io
+//   0:00 solo=drums | Fish alone on drums.
+//   0:30 solo=drums,bass pause | Mike joins. Listen for the push and pull.
+//   1:00 | Everyone back in.
+//
+// Header lines are `key: value` (title, lang, by, url; lang is the notes'
+// language code, which the page passes on to the browser; by and url name
+// and link the author). Stop lines start with
+// m:ss, then any of solo=, mute=, g= (as in the hash), to=m:ss (where the
+// stop ends, when not at the next stop; a later stop may start earlier, which
+// is how a passage is replayed) and pause, then `|` and the note. A stop with
+// no mix keys brings everyone back. The hash carries a guide as
+// guide=<name> for a built-in template, or guide=z<base64url of the deflated
+// text> for one written by hand; SplitOpen.guideLink(text) in the console
+// makes such a link.
+
+const GUIDE_TEMPLATES = {
+  spotlight: {
+    title: 'Spotlight',
+    lang: 'en',
+    by: 'Moshe Weitzman',
+    url: 'https://weitzman.github.io',
+    build() {
+      const order = ['drums', 'bass', 'keys', 'guitar', 'vocals'];
+      const stems = order.map(id => STEMS.find(s => s.id === id)).filter(Boolean);
+      const seg = Math.max(10, Math.min(30, Math.floor(duration / (stems.length + 1))));
+      const alone = s => s.id === 'vocals' ? 'Just the vocals.' : `${s.who} alone on ${s.inst.toLowerCase()}.`;
+      const stops = stems.map((s, i) => ({ ...emptyStop(i * seg), solo: [s.id], note: alone(s) }));
+      stops[0].note = `Each player alone in turn, then everyone together. First, ${alone(stems[0]).replace(/\.$/, '')}. `
+        + 'Listen for how the kick and snare lock to the hi-hat, where the fills land against the bar line, '
+        + 'and how the tempo breathes between sections. With nothing else in the way, the drums tell you '
+        + 'where the band is headed before anyone else does.';
+      stops.push({ ...emptyStop(stems.length * seg), note: 'Everyone back in.' });
+      return stops;
+    },
+  },
+};
+
+function emptyStop(at) {
+  return { at, to: null, solo: [], mute: [], gains: {}, pause: false, note: '' };
+}
+
+function parseClock(s) {
+  const m = /^(\d+):(\d{2}(?:\.\d+)?)$/.exec(s);
+  return m ? Number(m[1]) * 60 + Number(m[2]) : null;
+}
+
+function parseGuideText(text) {
+  const g = { title: '', lang: '', by: '', url: '', stops: [] };
+  for (let line of text.split('\n')) {
+    line = line.trim();
+    if (!line || line.startsWith('#')) continue;
+    const m = /^(\d+:\d{2}(?:\.\d+)?)\s*([^|]*)(?:\|\s*(.*))?$/.exec(line);
+    if (!m) {
+      const h = /^(title|lang|by|url):\s*(.*)$/i.exec(line);
+      if (h) g[h[1].toLowerCase()] = h[2].trim();
+      continue;
+    }
+    const stop = emptyStop(parseClock(m[1]));
+    stop.note = (m[3] || '').trim();
+    for (const tok of m[2].trim().split(/\s+/).filter(Boolean)) {
+      const eq = tok.indexOf('=');
+      const key = eq < 0 ? tok : tok.slice(0, eq);
+      const val = eq < 0 ? '' : tok.slice(eq + 1);
+      if (key === 'solo' || key === 'mute') stop[key] = parseStemList(val);
+      else if (key === 'g') stop.gains = parseGains(val);
+      else if (key === 'to') stop.to = parseClock(val);
+      else if (key === 'pause') stop.pause = true;
+    }
+    g.stops.push(stop);
+  }
+  return g;
+}
+
+// deflate + base64url, so a hand-written guide fits in a link: a dozen stops
+// with a sentence each come to roughly a kilobyte.
+function b64urlEncode(bytes) {
+  let s = '';
+  for (const b of bytes) s += String.fromCharCode(b);
+  return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+function b64urlDecode(str) {
+  return Uint8Array.from(atob(str.replace(/-/g, '+').replace(/_/g, '/')), ch => ch.charCodeAt(0));
+}
+
+async function pipeBytes(bytes, stream) {
+  const writer = stream.writable.getWriter();
+  writer.write(bytes).catch(() => {});
+  writer.close().catch(() => {});
+  return new Uint8Array(await new Response(stream.readable).arrayBuffer());
+}
+
+async function encodeGuide(text) {
+  return 'z' + b64urlEncode(await pipeBytes(new TextEncoder().encode(text), new CompressionStream('deflate')));
+}
+
+async function decodeGuide(param) {
+  if (param[0] !== 'z') throw new Error('unknown guide ' + param);
+  if (!window.DecompressionStream) throw new Error('this browser cannot open shared guides');
+  return new TextDecoder().decode(await pipeBytes(b64urlDecode(param.slice(1)), new DecompressionStream('deflate')));
+}
+
+window.SplitOpen = {
+  async guideLink(text) {
+    if (!song) throw new Error('load a song first');
+    return location.href.split('#')[0] + '#' + song.id + '&guide=' + await encodeGuide(text);
+  },
+};
+
+let guideParam = null;  // the hash's guide=, kept while the guide itself loads
+let guide = null;       // { param, title, lang, stops }
+let guideIndex = -1;    // the stop the playhead is in; -1 before the first
+let guideWaiting = false; // paused by a `pause` stop, waiting for Continue
+
+async function resolveGuide(param) {
+  const tpl = GUIDE_TEMPLATES[param];
+  if (tpl) return { param, title: tpl.title, lang: tpl.lang, by: tpl.by || '', url: tpl.url || '', stops: tpl.build() };
+  const g = parseGuideText(await decodeGuide(param));
+  if (!/^https?:\/\//i.test(g.url)) g.url = ''; // only web links, never javascript:
+  return { param, title: g.title || 'Guide', lang: g.lang || 'en', by: g.by, url: g.url, stops: g.stops };
+}
+
+// Brings the open guide in line with the hash's guide= value.
+async function syncGuide(state) {
+  const want = state.guide || null;
+  if ((guide ? guide.param : null) === want) return;
+  closeGuide(false);
+  guideParam = want;
+  if (!want) return;
+  let g;
+  try {
+    g = await resolveGuide(want);
+  } catch (err) {
+    console.error(err);
+    g = { param: want, title: 'Guide', lang: 'en', by: '', url: '', stops: [], error: 'This link holds a guide this browser cannot read.' };
+  }
+  if (!channels.length || guideParam !== want) return; // moved on meanwhile
+  openGuide(g);
+}
+
+function openGuide(g) {
+  guide = g;
+  guideIndex = -1;
+  renderGuide();
+  guideSync(false);
+  writeHash();
+}
+
+function closeGuide(write = true) {
+  if (!guide) return;
+  guideWaiting = false;
+  guide = null;
+  guideParam = null;
+  guideIndex = -1;
+  ui.guide.hidden = true;
+  ui.marks.innerHTML = '';
+  renderGuideChips();
+  if (write) writeHash();
+}
+
+function setGuide(param) {
+  syncGuide({ guide: param });
+}
+
+function guideEnd(i) {
+  const stops = guide.stops;
+  if (stops[i].to !== null) return stops[i].to;
+  const next = stops[i + 1];
+  return next && next.at > stops[i].at ? next.at : duration;
+}
+
+function inStop(i, pos) {
+  return pos >= guide.stops[i].at && pos < guideEnd(i);
+}
+
+// After the listener moves the playhead: find the stop that holds it, keeping
+// the current one when it still does, and enter it. Landing at a stop's start
+// counts as arriving there (so a `pause` stop pauses); landing inside it does
+// not.
+function guideSync(arrive) {
+  if (!guide || !guide.stops.length) return;
+  guideWaiting = false;
+  const pos = position();
+  const stops = guide.stops;
+  let i = guideIndex >= 0 && inStop(guideIndex, pos) ? guideIndex : stops.findIndex((s, k) => inStop(k, pos));
+  if (i < 0) for (let k = 0; k < stops.length; k++) if (stops[k].at <= pos) i = k;
+  if (i < 0) { guideIndex = -1; renderGuideNow(); return; }
+  if (i !== guideIndex) enterStop(i, arrive && pos - stops[i].at < 1.5);
+  else renderGuideNow();
+}
+
+// Each frame while playing: once the current stop has run out, move to the
+// next one, jumping to it when it starts elsewhere.
+function guideTick(pos) {
+  if (!guide || !playing || !guide.stops.length) return;
+  const stops = guide.stops;
+  if (guideIndex >= 0 && pos < stops[guideIndex].at - 0.1) return guideSync(true);
+  if (guideIndex >= 0 && pos < guideEnd(guideIndex)) return;
+  const next = guideIndex + 1;
+  if (next >= stops.length || pos < stops[next].at - 0.25) return;
+  if (Math.abs(pos - stops[next].at) > 0.5) seek(stops[next].at);
+  enterStop(next, true);
+}
+
+// On Play: find the stop under the playhead, since the song may have been
+// started over from the top.
+function guideResume() {
+  guideSync(false);
+}
+
+// Applies the stop's mix and shows its note. `arrive` means the playhead has
+// just reached the stop (as opposed to the guide being opened or the playhead
+// dropped somewhere inside it), which is when a `pause` stop pauses.
+function enterStop(i, arrive) {
+  const stop = guide.stops[i];
+  guideIndex = i;
+  for (const c of channels) {
+    c.solo = stop.solo.includes(c.def.id);
+    c.mute = stop.mute.includes(c.def.id);
+    const g = stop.gains[c.def.id] ?? 1;
+    c.ui.fader.value = g;
+    c.fader.gain.setTargetAtTime(g, ctx.currentTime, 0.01);
+  }
+  applyMuteSolo();
+  if (arrive && stop.pause && playing) {
+    pause();
+    guideWaiting = true;
+  }
+  renderGuideNow();
+}
+
+function guideMixLabel(stop) {
+  const names = ids => ids.map(id => (STEMS.find(s => s.id === id) || {}).who || id).join(', ');
+  if (stop.solo.length) return 'Solo ' + names(stop.solo);
+  if (stop.mute.length) return 'Mute ' + names(stop.mute);
+  return 'Full mix';
+}
+
+// Fills a note element with text clamped to `lines` lines and shows its
+// "more" link only when the text actually overflows; the link toggles the
+// full text. Overflow is measured after layout, hence the frame wait.
+function renderNote(noteEl, moreBtn, text, lines) {
+  noteEl.textContent = text;
+  noteEl.style.setProperty('--lines', lines);
+  noteEl.classList.add('clamp');
+  moreBtn.hidden = true;
+  moreBtn.textContent = 'more';
+  requestAnimationFrame(() => { moreBtn.hidden = noteEl.scrollHeight <= noteEl.clientHeight + 1; });
+}
+
+function wireMore(noteEl, moreBtn) {
+  moreBtn.addEventListener('click', () => {
+    const clamped = noteEl.classList.toggle('clamp');
+    moreBtn.textContent = clamped ? 'more' : 'less';
+  });
+}
+
+function renderGuide() {
+  ui.guide.hidden = false;
+  ui.guide.lang = guide.lang; // the notes' language, for screen readers and hyphenation
+  ui.guideTitle.textContent = guide.title;
+  if (guide.by) {
+    ui.guideTitle.append(', by ');
+    const who = document.createElement(guide.url ? 'a' : 'span');
+    who.className = 'guide-by';
+    who.textContent = guide.by;
+    if (guide.url) {
+      who.href = guide.url;
+      who.target = '_blank';
+      who.rel = 'noopener';
+    }
+    ui.guideTitle.appendChild(who);
+  }
+  ui.guideStops.innerHTML = '';
+  ui.marks.innerHTML = '';
+  guide.stops.forEach((stop, i) => {
+    const li = document.createElement('li');
+    const btn = document.createElement('button');
+    btn.className = 'stop';
+    const time = document.createElement('time');
+    time.textContent = fmt(stop.at);
+    const text = document.createElement('span');
+    text.className = 'note';
+    const more = document.createElement('button');
+    more.className = 'more';
+    renderNote(text, more, stop.note || guideMixLabel(stop), 2);
+    wireMore(text, more);
+    btn.append(time, text);
+    btn.addEventListener('click', () => {
+      guideWaiting = false;
+      seek(stop.at);
+      writePosition();
+      enterStop(i, true);
+    });
+    li.append(btn, more);
+    ui.guideStops.appendChild(li);
+
+    const mark = document.createElement('i');
+    mark.style.left = (stop.at / duration * 100).toFixed(2) + '%';
+    mark.title = fmt(stop.at) + '  ' + (stop.note || guideMixLabel(stop));
+    mark.addEventListener('click', () => btn.click());
+    ui.marks.appendChild(mark);
+  });
+  renderGuideChips();
+  renderGuideNow();
+}
+
+// The current stop is highlighted in the list and shown in full; the others
+// are clamped (the listener can still open any of them with "more").
+function renderGuideNow() {
+  if (!guide) return;
+  ui.guideStatus.textContent = guide.error || '';
+  ui.guideStatus.hidden = !guide.error;
+  ui.guideContinue.hidden = !guideWaiting;
+  Array.from(ui.guideStops.children).forEach((li, i) => {
+    const on = i === guideIndex;
+    if (on === li.classList.contains('on')) return;
+    li.classList.toggle('on', on);
+    const note = li.querySelector('.note');
+    const more = li.querySelector('.more');
+    if (on) {
+      note.classList.remove('clamp');
+      more.hidden = true;
+    } else {
+      renderNote(note, more, note.textContent, 2);
+    }
+  });
+  Array.from(ui.marks.children).forEach((mark, i) => mark.classList.toggle('on', i === guideIndex));
+  // Keep the current stop in view within the list only; scrollIntoView
+  // would drag the whole page along on a phone.
+  const list = ui.guideStops;
+  const on = list.children[guideIndex];
+  if (on) {
+    if (on.offsetTop < list.scrollTop) list.scrollTop = on.offsetTop;
+    else if (on.offsetTop + on.offsetHeight > list.scrollTop + list.clientHeight) {
+      list.scrollTop = on.offsetTop + on.offsetHeight - list.clientHeight;
+    }
+  }
+}
+
+// The chips under the song list, in the song chips' style with the author
+// where the band would be: one per built-in template, plus the open guide
+// when it arrived in the link.
+function renderGuideChips() {
+  const row = document.getElementById('guides');
+  row.innerHTML = '';
+  if (!song) return;
+  const label = document.createElement('span');
+  label.className = 'guides-label';
+  label.textContent = 'Guides';
+  row.appendChild(label);
+  const entries = Object.entries(GUIDE_TEMPLATES).map(([param, tpl]) => ({ param, title: tpl.title, by: tpl.by }));
+  if (guide && !GUIDE_TEMPLATES[guide.param]) entries.push(guide);
+  for (const { param, title, by } of entries) {
+    const btn = document.createElement('button');
+    btn.className = 'song chip';
+    btn.textContent = title;
+    if (by) {
+      const small = document.createElement('small');
+      small.textContent = by;
+      btn.appendChild(small);
+    }
+    btn.classList.toggle('on', !!guide && guide.param === param);
+    btn.addEventListener('click', () => {
+      if (!channels.length) return;
+      if (guide && guide.param === param) closeGuide();
+      else setGuide(param);
+    });
+    row.appendChild(btn);
+  }
+}
+
+function wireGuide() {
+  ui.guide = document.getElementById('guide');
+  ui.guideTitle = document.getElementById('guide-title');
+  ui.guideStatus = document.getElementById('guide-status');
+  ui.guideStops = document.getElementById('guide-stops');
+  ui.guideContinue = document.getElementById('guide-continue');
+  ui.marks = document.getElementById('marks');
+  ui.guideContinue.addEventListener('click', () => { guideWaiting = false; play(); });
+  document.getElementById('guide-close').addEventListener('click', () => closeGuide());
+}
+
 // ---------- UI ----------
 
 const ui = {};
@@ -671,6 +1086,7 @@ function tick() {
     const pos = position();
     if (!ui.seeking) ui.seek.value = Math.round(pos / duration * 1000);
     ui.cur.textContent = fmt(pos);
+    guideTick(pos);
 
     for (const c of channels) {
       c.analyser.getByteTimeDomainData(meterBuf);
@@ -706,6 +1122,7 @@ function wireTransport() {
     ui.seeking = false;
     seek(ui.seek.value / 1000 * duration);
     writePosition();
+    guideSync(true);
   });
   wireNudgeKeys();
 
@@ -775,7 +1192,8 @@ function renderHeader() {
   document.getElementById('title').textContent = song.title;
   document.getElementById('venue').textContent = `${song.date} · ${song.venue} · ${song.city}`;
   document.title = `Split Open — ${song.title}`;
-  for (const btn of document.querySelectorAll('.song')) {
+  renderGuideChips();
+  for (const btn of document.querySelectorAll('.song.in-list')) {
     btn.classList.toggle('on', btn.dataset.id === song.id);
   }
   mediaSessionMetadata();
@@ -786,7 +1204,7 @@ function renderSongList() {
   nav.innerHTML = '';
   for (const s of songs) {
     const btn = document.createElement('button');
-    btn.className = 'song';
+    btn.className = 'song in-list';
     btn.dataset.id = s.id;
     const who = (bands[s.band] || {}).name || s.band;
     btn.innerHTML = `${s.title}<small>${who}</small>`;
@@ -805,6 +1223,7 @@ async function loadSong(state) {
   if (song && next.id === song.id) return;
   const token = ++loadToken;
 
+  closeGuide(false);
   teardownChannels();
   hashPos = null;
   song = next;
@@ -842,6 +1261,7 @@ async function loadSong(state) {
     mixer.hidden = false;
     document.getElementById('transport').hidden = false;
     applyMixState(state);
+    syncGuide(state);
     warmOtherSongs(song);
   } catch (err) {
     if (token !== loadToken) return;
@@ -854,6 +1274,7 @@ async function loadSong(state) {
 
 (async () => {
   wireTransport();
+  wireGuide();
   mediaSessionInstall();
   tick();
   try {
@@ -872,7 +1293,10 @@ async function loadSong(state) {
     // Back/Forward step, or a hand-edited URL. A same-song change only has
     // to apply the mix; only a new song id loads stems (or reloads the page).
     const state = parseHash();
-    if (song && channels.length && findSong(state.id).id === song.id) return applyMixState(state);
+    if (song && channels.length && findSong(state.id).id === song.id) {
+      applyMixState(state);
+      return syncGuide(state);
+    }
     if (!(LOW_MEMORY && song)) return fromHash();
     // Drop every reference to the old song's PCM before the reload. Safari
     // keeps the same process across a reload and collects the old page's

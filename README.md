@@ -27,6 +27,43 @@ link can reproduce both. The song id comes first; the rest are `&`-separated
 The player keeps the hash current as you mix and the Copy link button (or `L`)
 copies it with the current position.
 
+## Guides
+
+A guide is a listening tour of a song: an ordered list of stops, each a
+moment, a mix, and a note. The mix holds from one stop to the next, and when
+the playhead reaches a stop its note is shown. The Spotlight guide under the
+song list is built in: each player alone in turn, then everyone together.
+
+Guides are written as plain text:
+
+    title: Mike's entrance
+    lang: en
+    by: Foo Bar
+    url: https://example.com/foo
+    0:00 solo=drums | Fish sets up the groove alone.
+    0:32 solo=drums,bass pause | Mike enters. Notice he plays behind the beat.
+    1:05 to=1:20 mute=vocals | The band without the singing.
+    1:05 solo=keys | The same passage, Page alone.
+    1:20 | Everyone back in.
+
+- Header lines are `key: value`: `title`, `lang` (the notes' language code,
+  e.g. `en` or `fr`), `by` (the author's name, shown in the guide's chip and
+  after its title) and `url` (a link for the author's name).
+- A stop line starts with `m:ss`, then any of `solo=`, `mute=`, `g=` (as in
+  the hash), `to=m:ss` (where the stop ends, when not at the next stop) and
+  `pause`, then `|` and the note. A stop with no mix keys brings everyone
+  back. A later stop may start earlier, which is how a passage is replayed.
+- `pause` stops the music at the stop until the listener presses Continue.
+
+A guide travels in the link: `#songid&guide=spotlight` for a built-in one, or
+`guide=z…`, the deflated text, for one written by hand. To make such a link,
+open the song, then in the browser console:
+
+    await SplitOpen.guideLink(`title: ...
+    0:00 solo=drums | ...`)
+
+A dozen stops with a sentence each come to about a kilobyte of link.
+
 Run locally with any static server from the repo root, e.g.
 `python3 -m http.server 8765`, then open `http://localhost:8765/web/`.
 

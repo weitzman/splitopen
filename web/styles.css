@@ -94,6 +94,24 @@ h1 {
 .song.on { background: var(--gold); border-color: var(--gold); color: #1a1200; }
 .song small { opacity: 0.7; font-weight: 400; margin-left: 6px; }
 
+/* Guides for this song: a labeled row of chips in the song-list style. */
+.guides {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+.guides:empty { display: none; }
+.guides-label {
+  color: var(--muted);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  margin-right: 4px;
+}
+
 .loading { text-align: center; color: var(--muted); font-size: 14px; }
 .loading-bar {
   margin: 10px auto 0;
@@ -269,6 +287,107 @@ h1 {
   }
 }
 
+/* Guide panel: the current note up top, the list of stops beneath. */
+.guide[hidden] { display: none; }
+.guide {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.guide-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+.guide-kicker {
+  color: var(--gold);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+}
+.guide-title {
+  font-family: Righteous, Inter, sans-serif;
+  font-size: 18px;
+  flex: 1 0 auto; /* never squeezed; on a phone the controls wrap below */
+}
+.guide-by { color: inherit; }
+a.guide-by { text-decoration: underline; text-underline-offset: 3px; }
+a.guide-by:hover { color: var(--gold); }
+.btn.guide-close { margin-left: auto; }
+.btn.guide-close {
+  min-width: 34px;
+  padding: 0;
+  font-size: 20px;
+  line-height: 1;
+  color: var(--muted);
+}
+.guide-status { margin: 0; color: var(--donut); }
+.guide-status[hidden] { display: none; }
+/* Long notes are clamped to a few lines, with a "more" link that shows the
+   rest; the link only appears when there is more. */
+.note.clamp {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: var(--lines, 2);
+  line-clamp: var(--lines, 2);
+  overflow: hidden;
+}
+.more {
+  border: none;
+  background: none;
+  padding: 0;
+  color: var(--gold);
+  font: 600 13px Inter, sans-serif;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.more[hidden] { display: none; }
+.guide-stops li { display: flex; flex-wrap: wrap; }
+.guide-stops .more { margin: -4px 0 6px 54px; } /* under the text, clear of the time column */
+.btn.continue {
+  align-self: flex-start;
+  background: var(--gold);
+  border-color: var(--gold);
+  color: #1a1200;
+}
+.guide-stops {
+  position: relative; /* so each stop's offsetTop is measured from the list */
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 240px;
+  overflow-y: auto;
+}
+.guide-stops .stop {
+  display: flex;
+  gap: 12px;
+  align-items: baseline;
+  flex: 1 0 100%;
+  min-width: 0;
+  padding: 7px 6px;
+  border: none;
+  background: none;
+  color: var(--muted);
+  font: 14px Inter, sans-serif;
+  text-align: left;
+  cursor: pointer;
+  border-radius: 6px;
+}
+.guide-stops .stop:hover { background: rgba(255,255,255,0.06); color: var(--text); }
+.guide-stops li.on .stop { color: var(--text); font-size: 16px; }
+.guide-stops li.on .stop time { color: var(--gold); }
+.guide-stops time {
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+  min-width: 36px;
+}
+
 /* Transport */
 .transport {
   position: sticky;
@@ -301,7 +420,38 @@ h1 {
 .play.playing .icon-pause { display: block; }
 
 .time { font-variant-numeric: tabular-nums; color: var(--muted); font-size: 14px; min-width: 44px; text-align: center; }
+.seek-wrap { flex: 1; min-width: 0; position: relative; display: flex; align-items: center; }
 .seek { flex: 1; min-width: 0; accent-color: var(--gold); cursor: pointer; }
+/* Guide stops are ticks over the seek bar, each with its note as a tooltip;
+   clicking one jumps to the stop. The row is inset by half the thumb so the
+   ticks line up with where the thumb lands. */
+.marks {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  top: 50%;
+  height: 12px;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+.marks i {
+  position: absolute;
+  top: 0;
+  width: 2px;
+  height: 100%;
+  margin-left: -1px;
+  background: var(--gold);
+  opacity: 0.6;
+  border-radius: 1px;
+  cursor: pointer;
+  pointer-events: auto;
+}
+.marks i::before { /* a wider hit area than the tick itself */
+  content: '';
+  position: absolute;
+  inset: -4px -5px;
+}
+.marks i:hover, .marks i.on { opacity: 1; }
 /* Share icon, in the style of GitHub's small clipboard buttons. Where there
    is no share sheet the link is copied instead, and the glyph gives way to a
    check for a moment, or turns red if the copy failed. */
