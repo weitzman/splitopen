@@ -461,9 +461,16 @@ function mediaSessionInstall() {
 // media element has registered as Now Playing; handlers set earlier are
 // dropped, so the seek and track handlers wait for the keep-alive element's
 // first 'playing' event, which fires after that registration.
+//
+// The iOS lock screen shows either track buttons or seek buttons, and picks
+// track buttons when both are registered, so the track handlers are left out
+// there. iOS passes its own 15-second interval through details.seekOffset.
+const IOS = /iP(hone|ad|od)/.test(navigator.platform)
+  || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 function mediaSessionWatchKeepalive(el) {
   el.addEventListener('playing', () => {
-    mediaSessionSetHandlers(['seekbackward', 'seekforward', 'seekto', 'previoustrack', 'nexttrack']);
+    mediaSessionSetHandlers(['seekbackward', 'seekforward', 'seekto']);
+    if (!IOS) mediaSessionSetHandlers(['previoustrack', 'nexttrack']);
   }, { once: true });
 }
 
