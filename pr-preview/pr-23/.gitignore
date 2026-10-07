@@ -1,0 +1,5 @@
+# Source recordings and raw model output stay local; only the encoded
+# per-song stems in audio/songs/ are committed.
+audio/src/
+audio/stems/
+.DS_Store
