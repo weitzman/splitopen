@@ -229,6 +229,9 @@ h1 {
 @media (max-width: 720px) {
   .app { gap: 12px; padding-bottom: 92px; }
   .help > span { display: none; } /* keyboard shortcuts mean nothing on a touch screen */
+  /* Everything else in the header is centered, and the phone gap is tight,
+     so the logo joins the centered column and keeps clear of the title. */
+  .logo { align-self: center; margin-bottom: 0; }
   .show { padding-top: 0; }
   h1 { margin: 0 0 4px; }
   .songs { margin-top: 10px; }
