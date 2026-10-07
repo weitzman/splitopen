@@ -4,10 +4,10 @@
 #   scripts/add-song.sh <archive.org flac url> [--title "Song"] [--set "Set II"] [--source "Soundboard"] [--band "Phish"]
 #
 # The band defaults to the item's creator; its channel layout (who plays what)
-# must exist in web/bands.json under the slugified band name.
+# must exist in bands.json under the slugified band name.
 #
 # Steps: download FLAC -> BS-Roformer-SW separation -> encode five Opus stems
-# (piano+other merged into keys) -> add/replace the entry in web/songs.json.
+# (piano+other merged into keys) -> add/replace the entry in songs.json.
 # Each step is skipped when its output already exists, so re-running is cheap.
 #
 # Stems are Opus in an Ogg container (.opus). Safari used to accept Opus only
@@ -68,7 +68,7 @@ fi
 # --- 2. metadata --------------------------------------------------------
 echo "[2/4] fetching metadata for $item"
 curl -fsL "https://archive.org/metadata/$item" -o "$src_dir/metadata.json"
-meta="$(python3 - "$src_dir/metadata.json" "$fname" "$title" "$band" "$ROOT/web/bands.json" <<'PY'
+meta="$(python3 - "$src_dir/metadata.json" "$fname" "$title" "$band" "$ROOT/bands.json" <<'PY'
 import json, re, sys
 d = json.load(open(sys.argv[1])); m = d.get('metadata', {}); fname, title, band = sys.argv[2], sys.argv[3], sys.argv[4]
 f = next((f for f in d.get('files', []) if f.get('name') == fname), {})
@@ -79,7 +79,7 @@ band = band or m.get('creator') or 'Phish'
 if isinstance(band, list): band = band[0]
 band_id = re.sub(r'[^a-z0-9]+', '-', band.lower()).strip('-')
 if band_id not in json.load(open(sys.argv[5])):
-    sys.exit(f"band '{band}' ({band_id}) has no channel layout in web/bands.json; add one or pass --band")
+    sys.exit(f"band '{band}' ({band_id}) has no channel layout in bands.json; add one or pass --band")
 date = (m.get('date') or '')[:10]
 venue = m.get('venue') or ''; city = m.get('coverage') or ''
 t = m.get('title') or ''
@@ -122,13 +122,13 @@ else
     -filter_complex "amix=inputs=2:normalize=0" -c:a libopus -b:a "$BITRATE" "$out/keys.opus"
 fi
 
-python3 - "$ROOT/web/songs.json" "$meta" "$id" "$set_name" "$source_name" <<'PY'
+python3 - "$ROOT/songs.json" "$meta" "$id" "$set_name" "$source_name" <<'PY'
 import json, sys
 path, meta, id_, set_name, source = sys.argv[1:]
 meta = json.loads(meta)
 entry = {'id': id_, 'band': meta['band'], 'title': meta['title'], 'date': meta['date'], 'set': set_name,
          'venue': meta['venue'], 'city': meta['city'], 'source': source,
-         'dir': f'../audio/songs/{id_}/'}
+         'dir': f'audio/songs/{id_}/'}
 try:
     songs = json.load(open(path))
 except FileNotFoundError:
@@ -140,7 +140,7 @@ if old:
 else:
     songs.append(entry)  # new songs go on the end of the picker
 json.dump(songs, open(path, 'w'), indent=2); open(path, 'a').write('\n')
-print(f"      {'updated' if old else 'added'} web/songs.json entry {id_}")
+print(f"      {'updated' if old else 'added'} songs.json entry {id_}")
 PY
 
 echo "done: open the player and pick \"$title\" (hash #$id)"
