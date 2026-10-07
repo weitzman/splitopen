@@ -38,13 +38,15 @@ then everyone together.
 
 To write one, press **+ New guide** under the song list (or **Copy & edit**
 on an open guide to start from a copy of it), play the song, set mute/solo, and press `N` (or
-**Tip: Start**) where a passage worth a tip begins, then `N` again (**Tip:
-End**) where it ends. The tip takes that passage and the mix in force when it
-started. Start and end can be edited, tips dragged into another order by
-their handle, or removed. **Describe** then swaps the mixer for one card per
-tip, where the play button loops that passage with the tip's mix while its
-note is written. The draft is kept in the link as it changes, so **Share**
-hands it out and a reload brings it back. The title, author and language are not asked for while writing; they
+**Tip: Start**) where a passage worth a tip begins. The tip takes that
+moment and the mix in force, and runs to the next tip unless given an end.
+The list shows one line per tip with edit, play and delete; edit opens that
+tip alone, with its start, optional end and description, and a play button
+that loops the passage. Start and end are set from the playhead: scrub or
+play to the moment, then press Set. Tapping the mix label opens a sheet with
+Mute and Solo per player, heard as you choose. Tips can be dragged into another order
+by their handle. The list is always saved: the draft is kept in the link as it
+changes, so **Share** hands it out and a reload brings it back. The title, author and language are not asked for while writing; they
 belong to the step of offering a guide to the library.
 
 Guides are written as plain text:
@@ -76,8 +78,9 @@ open the song, then in the browser console:
 
 A dozen tips with a sentence each come to about a kilobyte of link.
 
-Run locally with any static server from the repo root, e.g.
-`python3 -m http.server 8765`, then open `http://localhost:8765/`.
+Run locally with `python3 scripts/serve.py` (a static server that turns
+caching off, so a reload always gets the current files) and open
+`http://localhost:8765/`. Any static server from the repo root works too.
 
 The site is served by GitHub Pages from the `gh-pages` branch, which a
 workflow refreshes from `main` on every push. Each pull request gets a
