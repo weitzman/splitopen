@@ -645,8 +645,8 @@ function buildStrip(c, index) {
       </div>
     </div>
     <div class="buttons">
-      <button class="btn mute" title="Mute (shift+${index + 1})">M</button>
-      <button class="btn solo" title="Solo (${index + 1})">S</button>
+      <button class="btn mute" title="Mute (shift+${index + 1})"><span class="short">M</span><span class="long">Mute</span></button>
+      <button class="btn solo" title="Solo (${index + 1})"><span class="short">S</span><span class="long">Solo</span></button>
     </div>
   `;
   const fader = strip.querySelector('.fader');
@@ -772,7 +772,6 @@ async function shareLink() {
 }
 
 function renderHeader() {
-  document.getElementById('eyebrow').textContent = band.name;
   document.getElementById('title').textContent = song.title;
   document.getElementById('venue').textContent = `${song.date} · ${song.venue} · ${song.city}`;
   document.title = `Split Open — ${song.title}`;
