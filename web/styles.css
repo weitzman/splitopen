@@ -214,9 +214,12 @@ h1 {
 .btn:hover { background: rgba(255,255,255,0.12); }
 .btn.mute.on { background: var(--donut); border-color: var(--donut); color: #fff; }
 .btn.solo.on { background: var(--gold); border-color: var(--gold); color: #1a1200; }
-/* M / S become Mute / Solo once the strip is wide enough to hold the words. */
+/* M / S become Mute / Solo once the strip is wide enough to hold the words.
+   The two labeled buttons plus their gap come to about 126px; the query is
+   against the strip's content box, which is 170px at the full 1040px app
+   width and shrinks with the window. */
 .btn .long { display: none; }
-@container (min-width: 170px) {
+@container (min-width: 130px) {
   .btn .short { display: none; }
   .btn .long { display: inline; }
 }
