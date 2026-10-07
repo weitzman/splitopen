@@ -2,20 +2,20 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="refresh" content="0; url=web/">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Split Open</title>
 <meta name="description" content="A stem mixer for live recordings. Mute, solo, and fade the guitar, bass, keys, drums, and vocals.">
-<link rel="canonical" href="https://weitzman.github.io/splitopen/web/">
+<link rel="canonical" href="https://weitzman.github.io/splitopen/">
 <meta name="theme-color" content="#0b1026">
-<link rel="icon" href="web/favicon.svg" type="image/svg+xml">
-<link rel="apple-touch-icon" href="web/apple-touch-icon.png">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
 
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Split Open">
 <meta property="og:title" content="Split Open">
 <meta property="og:description" content="A stem mixer for live recordings. Mute, solo, and fade the guitar, bass, keys, drums, and vocals.">
-<meta property="og:url" content="https://weitzman.github.io/splitopen/web/">
-<meta property="og:image" content="https://weitzman.github.io/splitopen/web/social.png">
+<meta property="og:url" content="https://weitzman.github.io/splitopen/">
+<meta property="og:image" content="https://weitzman.github.io/splitopen/social.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta property="og:image:alt" content="Split Open: a five-channel stem mixer with Trey, Mike, Page, Fish, and Vocals strips">
@@ -24,10 +24,63 @@
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Split Open">
 <meta name="twitter:description" content="A stem mixer for live recordings. Mute, solo, and fade the guitar, bass, keys, drums, and vocals.">
-<meta name="twitter:image" content="https://weitzman.github.io/splitopen/web/social.png">
+<meta name="twitter:image" content="https://weitzman.github.io/splitopen/social.png">
 <meta name="twitter:image:alt" content="Split Open: a five-channel stem mixer with Trey, Mike, Page, Fish, and Vocals strips">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@700&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
 </head>
 <body>
-<a href="web/">Launch Split Open</a>
+<div class="backdrop" aria-hidden="true"></div>
+
+<main class="app">
+  <a class="logo" href="./" aria-label="Split Open">
+    <svg class="logo-mark" viewBox="0 0 64 40" aria-hidden="true">
+      <path d="M2 20h6l4-14 6 28 5-20 4 12 3-6h6" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M36 20c10 0 10-16 24-16" fill="none" stroke="var(--trey)" stroke-width="3" stroke-linecap="round"/>
+      <path d="M36 20c10 0 10-8 24-8" fill="none" stroke="var(--mike)" stroke-width="3" stroke-linecap="round"/>
+      <path d="M36 20h24" fill="none" stroke="var(--page)" stroke-width="3" stroke-linecap="round"/>
+      <path d="M36 20c10 0 10 8 24 8" fill="none" stroke="var(--fish)" stroke-width="3" stroke-linecap="round"/>
+      <path d="M36 20c10 0 10 16 24 16" fill="none" stroke="var(--vox)" stroke-width="3" stroke-linecap="round"/>
+    </svg>
+    <span class="logo-text">Split Open</span>
+  </a>
+  <header class="show">
+    <h1 id="title">Split Open</h1>
+    <div class="venue" id="venue"></div>
+    <nav class="songs" id="songs" aria-label="Songs"></nav>
+  </header>
+
+  <section class="loading" id="loading">
+    <div class="loading-label" id="loading-label">Loading stems…</div>
+    <div class="loading-bar"><div class="loading-fill" id="loading-fill"></div></div>
+  </section>
+
+  <section class="mixer" id="mixer" hidden></section>
+
+  <section class="transport" id="transport" hidden>
+    <button class="play" id="play" aria-label="Play">
+      <svg class="icon-play" viewBox="0 0 24 24"><path d="M7 4l14 8-14 8z"/></svg>
+      <svg class="icon-pause" viewBox="0 0 24 24"><path d="M6 4h4v16H6zM14 4h4v16h-4z"/></svg>
+    </button>
+    <div class="time" id="time-cur">0:00</div>
+    <input class="seek" id="seek" type="range" min="0" max="1000" value="0" step="1" aria-label="Seek">
+    <div class="time" id="time-dur">0:00</div>
+    <button class="btn share" id="share" title="Share a link to this mix and moment (L)" aria-label="Share mix">
+      <svg class="icon-share" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 10H6.5A1.5 1.5 0 0 0 5 11.5v8A1.5 1.5 0 0 0 6.5 21h11a1.5 1.5 0 0 0 1.5-1.5v-8a1.5 1.5 0 0 0-1.5-1.5H16"/><path d="M12 15V3M8 7l4-4 4 4"/></svg>
+      <svg class="icon-check" viewBox="0 0 16 16" aria-hidden="true"><path d="M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0Z"/></svg>
+    </button>
+  </section>
+
+  <footer class="help">
+    <span><kbd>space</kbd> play / pause</span>
+    <span><kbd>1</kbd>–<kbd>5</kbd> solo</span>
+    <span><kbd>←</kbd> <kbd>→</kbd> ±5 s</span>
+    <span><kbd>L</kbd> share mix</span>
+    <p class="colophon">Split Open so we can learn and appreciate. By <a href="https://weitzman.github.io">Moshe Weitzman</a>.</p>
+  </footer>
+</main>
+
+<script src="app.js"></script>
 </body>
 </html>
