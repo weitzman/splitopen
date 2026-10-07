@@ -61,13 +61,16 @@
 
   <section class="guide" id="guide" hidden>
     <div class="guide-head">
-      <span class="guide-kicker">Guide</span>
+      <span class="guide-kicker" id="guide-kicker">Guide</span>
       <span class="guide-title" id="guide-title"></span>
+      <button class="btn guide-add" id="guide-add" hidden>Tip: Start</button>
+      <button class="btn guide-describe" id="guide-describe" title="Write what to listen for in each tip" hidden>Describe</button>
+      <button class="btn guide-edit" id="guide-edit" title="Copy this guide into one of your own and change it">Copy &amp; edit</button>
       <button class="btn guide-close" id="guide-close" aria-label="Close guide">&times;</button>
     </div>
     <p class="guide-status" id="guide-status" hidden></p>
     <button class="btn continue" id="guide-continue" hidden>Continue</button>
-    <ol class="guide-stops" id="guide-stops"></ol>
+    <ol class="guide-tips" id="guide-tips"></ol>
   </section>
 
   <section class="transport" id="transport" hidden>
@@ -92,6 +95,7 @@
     <span><kbd>1</kbd>–<kbd>5</kbd> solo</span>
     <span><kbd>←</kbd> <kbd>→</kbd> ±5 s</span>
     <span><kbd>L</kbd> share mix</span>
+    <span><kbd>N</kbd> start / end a tip</span>
     <p class="colophon">Split Open so we can learn and appreciate. By <a href="https://weitzman.github.io">Moshe Weitzman</a>.</p>
   </footer>
 </main>

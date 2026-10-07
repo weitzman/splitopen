@@ -30,10 +30,22 @@ copies it with the current position.
 
 ## Guides
 
-A guide is a listening tour of a song: an ordered list of stops, each a
-moment, a mix, and a note. The mix holds from one stop to the next, and when
-the playhead reaches a stop its note is shown. The Spotlight guide under the
-song list is built in: each player alone in turn, then everyone together.
+A guide is a listening tour of a song: an ordered list of tips, each a
+passage, a mix, and a note. The mix holds for the passage and the band plays
+in full between tips; when the playhead reaches a tip its note is shown. The
+Spotlight guide under the song list is built in: each player alone in turn,
+then everyone together.
+
+To write one, press **+ New guide** under the song list (or **Copy & edit**
+on an open guide to start from a copy of it), play the song, set mute/solo, and press `N` (or
+**Tip: Start**) where a passage worth a tip begins, then `N` again (**Tip:
+End**) where it ends. The tip takes that passage and the mix in force when it
+started. Start and end can be edited, tips dragged into another order by
+their handle, or removed. **Describe** then swaps the mixer for one card per
+tip, where the play button loops that passage with the tip's mix while its
+note is written. The draft is kept in the link as it changes, so **Share**
+hands it out and a reload brings it back. The title, author and language are not asked for while writing; they
+belong to the step of offering a guide to the library.
 
 Guides are written as plain text:
 
@@ -41,20 +53,19 @@ Guides are written as plain text:
     lang: en
     by: Foo Bar
     url: https://example.com/foo
-    0:00 solo=drums | Fish sets up the groove alone.
-    0:32 solo=drums,bass pause | Mike enters. Notice he plays behind the beat.
+    0:00 to=0:32 solo=drums | Fish sets up the groove alone.
+    0:32 to=1:05 solo=drums,bass pause | Mike enters. Notice he plays behind the beat.
     1:05 to=1:20 mute=vocals | The band without the singing.
-    1:05 solo=keys | The same passage, Page alone.
-    1:20 | Everyone back in.
+    1:05 to=1:20 solo=keys | The same passage, Page alone.
 
 - Header lines are `key: value`: `title`, `lang` (the notes' language code,
   e.g. `en` or `fr`), `by` (the author's name, shown in the guide's chip and
   after its title) and `url` (a link for the author's name).
-- A stop line starts with `m:ss`, then any of `solo=`, `mute=`, `g=` (as in
-  the hash), `to=m:ss` (where the stop ends, when not at the next stop) and
-  `pause`, then `|` and the note. A stop with no mix keys brings everyone
-  back. A later stop may start earlier, which is how a passage is replayed.
-- `pause` stops the music at the stop until the listener presses Continue.
+- A tip line starts with `m:ss`, then any of `to=m:ss` (where the tip ends;
+  without it, at the next tip), `solo=`, `mute=`, `g=` (as in the hash) and
+  `pause`, then `|` and the note. A later tip may start before the one
+  before it ends, which is how a passage is replayed.
+- `pause` stops the music at the tip until the listener presses Continue.
 
 A guide travels in the link: `#songid&guide=spotlight` for a built-in one, or
 `guide=z…`, the deflated text, for one written by hand. To make such a link,
@@ -63,7 +74,7 @@ open the song, then in the browser console:
     await SplitOpen.guideLink(`title: ...
     0:00 solo=drums | ...`)
 
-A dozen stops with a sentence each come to about a kilobyte of link.
+A dozen tips with a sentence each come to about a kilobyte of link.
 
 Run locally with any static server from the repo root, e.g.
 `python3 -m http.server 8765`, then open `http://localhost:8765/`.
