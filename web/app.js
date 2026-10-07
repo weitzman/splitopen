@@ -63,6 +63,7 @@ function keepaliveStart() {
     keepalive = new Audio(silentWavUrl());
     keepalive.loop = true;
     keepalive.setAttribute('playsinline', '');
+    mediaSessionWatchKeepalive(keepalive);
   }
   keepalive.play().catch(() => { /* not allowed outside a gesture; harmless */ });
 }
@@ -414,20 +415,37 @@ function seek(to) {
 // these go through navigator.mediaSession, which browsers only surface while a
 // media element is playing; on iOS that is the keep-alive element above.
 
-function mediaSessionInstall() {
+const MEDIA_ACTIONS = {
+  play: () => play(),
+  pause: () => pause(),
+  seekbackward: d => seek(position() - ((d && d.seekOffset) || 10)),
+  seekforward: d => seek(position() + ((d && d.seekOffset) || 10)),
+  seekto: d => { if (d && typeof d.seekTime === 'number') seek(d.seekTime); },
+  previoustrack: () => mediaSessionStep(-1),
+  nexttrack: () => mediaSessionStep(1),
+};
+
+function mediaSessionSetHandlers(actions) {
   if (!('mediaSession' in navigator)) return;
-  const handlers = {
-    play: () => play(),
-    pause: () => pause(),
-    seekbackward: d => seek(position() - ((d && d.seekOffset) || 10)),
-    seekforward: d => seek(position() + ((d && d.seekOffset) || 10)),
-    seekto: d => { if (d && typeof d.seekTime === 'number') seek(d.seekTime); },
-    previoustrack: () => mediaSessionStep(-1),
-    nexttrack: () => mediaSessionStep(1),
-  };
-  for (const [action, fn] of Object.entries(handlers)) {
-    try { navigator.mediaSession.setActionHandler(action, fn); } catch (_) { /* action unsupported */ }
+  for (const action of actions) {
+    try { navigator.mediaSession.setActionHandler(action, MEDIA_ACTIONS[action]); } catch (_) { /* action unsupported */ }
   }
+}
+
+// play and pause are registered up front; without them a lock-screen play
+// would start the keep-alive element but not the Web Audio graph.
+function mediaSessionInstall() {
+  mediaSessionSetHandlers(['play', 'pause']);
+}
+
+// iOS Safari only tells the system which commands a page supports once a
+// media element has registered as Now Playing; handlers set earlier are
+// dropped, so the seek and track handlers wait for the keep-alive element's
+// first 'playing' event, which fires after that registration.
+function mediaSessionWatchKeepalive(el) {
+  el.addEventListener('playing', () => {
+    mediaSessionSetHandlers(['seekbackward', 'seekforward', 'seekto', 'previoustrack', 'nexttrack']);
+  }, { once: true });
 }
 
 // Wraps around the song list, the same way the sidebar switches songs.
