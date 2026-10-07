@@ -49,6 +49,7 @@
     <h1 id="title">Split Open</h1>
     <div class="venue" id="venue"></div>
     <nav class="songs" id="songs" aria-label="Songs"></nav>
+    <nav class="guides" id="guides" aria-label="Guides"></nav>
   </header>
 
   <section class="loading" id="loading">
@@ -58,13 +59,27 @@
 
   <section class="mixer" id="mixer" hidden></section>
 
+  <section class="guide" id="guide" hidden>
+    <div class="guide-head">
+      <span class="guide-kicker">Guide</span>
+      <span class="guide-title" id="guide-title"></span>
+      <button class="btn guide-close" id="guide-close" aria-label="Close guide">&times;</button>
+    </div>
+    <p class="guide-status" id="guide-status" hidden></p>
+    <button class="btn continue" id="guide-continue" hidden>Continue</button>
+    <ol class="guide-stops" id="guide-stops"></ol>
+  </section>
+
   <section class="transport" id="transport" hidden>
     <button class="play" id="play" aria-label="Play">
       <svg class="icon-play" viewBox="0 0 24 24"><path d="M7 4l14 8-14 8z"/></svg>
       <svg class="icon-pause" viewBox="0 0 24 24"><path d="M6 4h4v16H6zM14 4h4v16h-4z"/></svg>
     </button>
     <div class="time" id="time-cur">0:00</div>
-    <input class="seek" id="seek" type="range" min="0" max="1000" value="0" step="1" aria-label="Seek">
+    <div class="seek-wrap">
+      <div class="marks" id="marks" aria-hidden="true"></div>
+      <input class="seek" id="seek" type="range" min="0" max="1000" value="0" step="1" aria-label="Seek">
+    </div>
     <div class="time" id="time-dur">0:00</div>
     <button class="btn share" id="share" title="Share a link to this mix and moment (L)" aria-label="Share mix">
       <svg class="icon-share" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 10H6.5A1.5 1.5 0 0 0 5 11.5v8A1.5 1.5 0 0 0 6.5 21h11a1.5 1.5 0 0 0 1.5-1.5v-8a1.5 1.5 0 0 0-1.5-1.5H16"/><path d="M12 15V3M8 7l4-4 4 4"/></svg>
