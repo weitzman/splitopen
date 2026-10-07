@@ -38,35 +38,56 @@ const LOW_MEMORY = !navigator.deviceMemory && navigator.maxTouchPoints > 1;
 // ring/silent switch, so the graph runs but nothing comes out of the speaker.
 // Media elements use the "playback" session instead. On iOS 17+ we can ask for
 // that session directly; on older iOS, keeping a silent <audio> element playing
-// alongside the graph has the same effect.
+// alongside the graph has the same effect. The silent element also runs on
+// iOS 17+, because the lock-screen and headphone controls (see the media
+// session block below) only appear while a media element is playing; Web Audio
+// alone never counts as "Now Playing".
 if (navigator.audioSession) {
   try { navigator.audioSession.type = 'playback'; } catch (_) { /* unsupported value */ }
 }
 
-function silentWavUrl() {
-  const rate = 8000, frames = rate / 2; // half a second of silence
-  const buf = new ArrayBuffer(44 + frames * 2);
+// 8 kHz 8-bit mono silence; 8 KB per second, so a 10-minute song is ~5 MB.
+function silentWavUrl(seconds) {
+  const rate = 8000, frames = rate * seconds;
+  const buf = new ArrayBuffer(44 + frames);
   const v = new DataView(buf);
   const str = (o, t) => { for (let i = 0; i < t.length; i++) v.setUint8(o + i, t.charCodeAt(i)); };
-  str(0, 'RIFF'); v.setUint32(4, 36 + frames * 2, true); str(8, 'WAVE');
+  str(0, 'RIFF'); v.setUint32(4, 36 + frames, true); str(8, 'WAVE');
   str(12, 'fmt '); v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
-  v.setUint32(24, rate, true); v.setUint32(28, rate * 2, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true);
-  str(36, 'data'); v.setUint32(40, frames * 2, true);
+  v.setUint32(24, rate, true); v.setUint32(28, rate, true); v.setUint16(32, 1, true); v.setUint16(34, 8, true);
+  str(36, 'data'); v.setUint32(40, frames, true);
+  new Uint8Array(buf, 44).fill(0x80); // unsigned 8-bit silence
   return URL.createObjectURL(new Blob([buf], { type: 'audio/wav' }));
 }
 
+// Safari copies this element's currentTime into the Media Session position
+// state whenever the element seeks, loops, or pauses, which is what the lock
+// screen scrubber shows. So the silent file outlasts the song and the element's
+// clock is kept on the song position: it starts at the current offset and
+// follows every seek.
 let keepalive = null;
+let keepaliveSeconds = 0;
 function keepaliveStart() {
-  if (navigator.audioSession) return;
   if (!keepalive) {
-    keepalive = new Audio(silentWavUrl());
+    keepalive = new Audio();
     keepalive.loop = true;
     keepalive.setAttribute('playsinline', '');
+    mediaSessionWatchKeepalive(keepalive);
   }
+  const seconds = Math.ceil(duration) + 5;
+  if (keepaliveSeconds < seconds) {
+    if (keepalive.src) URL.revokeObjectURL(keepalive.src);
+    keepalive.src = silentWavUrl(seconds);
+    keepaliveSeconds = seconds;
+  }
+  keepalive.currentTime = offset;
   keepalive.play().catch(() => { /* not allowed outside a gesture; harmless */ });
 }
 function keepaliveStop() {
   if (keepalive) keepalive.pause();
+}
+function keepaliveSeek(to) {
+  if (keepalive && !keepalive.paused) keepalive.currentTime = to;
 }
 
 let songs = [];
@@ -463,6 +484,7 @@ function setPlayButton(on) {
   ui.play.classList.toggle('playing', on);
   ui.play.setAttribute('aria-label', on ? 'Pause' : 'Play');
   updateHints();
+  mediaSessionState(on);
 }
 
 async function play() {
@@ -500,6 +522,8 @@ function seek(to) {
   if (wasPlaying) startSources(offset);
   ui.seek.value = Math.round(offset / duration * 1000);
   ui.cur.textContent = fmt(offset);
+  keepaliveSeek(offset);
+  mediaSessionPosition();
 }
 
 // Left and Right arrows step the playhead 5 s either way, through seek() so
@@ -512,6 +536,90 @@ function wireNudgeKeys() {
     e.preventDefault();
     seek(position() + (e.key === 'ArrowLeft' ? -5 : 5));
   });
+}
+
+// ---------- media session ----------
+// Lock-screen, media-hub, headphone and keyboard media-key controls. All of
+// these go through navigator.mediaSession, which browsers only surface while a
+// media element is playing; on iOS that is the keep-alive element above.
+
+const MEDIA_ACTIONS = {
+  play: () => play(),
+  pause: () => pause(),
+  seekbackward: d => seek(position() - ((d && d.seekOffset) || 10)),
+  seekforward: d => seek(position() + ((d && d.seekOffset) || 10)),
+  seekto: d => { if (d && typeof d.seekTime === 'number') seek(d.seekTime); },
+  previoustrack: () => mediaSessionStep(-1),
+  nexttrack: () => mediaSessionStep(1),
+};
+
+function mediaSessionSetHandlers(actions) {
+  if (!('mediaSession' in navigator)) return;
+  for (const action of actions) {
+    try { navigator.mediaSession.setActionHandler(action, MEDIA_ACTIONS[action]); } catch (_) { /* action unsupported */ }
+  }
+}
+
+// play and pause are registered up front; without them a lock-screen play
+// would start the keep-alive element but not the Web Audio graph.
+function mediaSessionInstall() {
+  mediaSessionSetHandlers(['play', 'pause']);
+}
+
+// iOS Safari only tells the system which commands a page supports once a
+// media element has registered as Now Playing; handlers set earlier are
+// dropped, so the seek and track handlers wait for the keep-alive element's
+// first 'playing' event, which fires after that registration.
+//
+// The iOS lock screen shows either track buttons or seek buttons, and picks
+// track buttons when both are registered, so the track handlers are left out
+// there. iOS passes its own 15-second interval through details.seekOffset.
+const IOS = /iP(hone|ad|od)/.test(navigator.platform)
+  || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+function mediaSessionWatchKeepalive(el) {
+  el.addEventListener('playing', () => {
+    mediaSessionSetHandlers(['seekbackward', 'seekforward', 'seekto']);
+    if (!IOS) mediaSessionSetHandlers(['previoustrack', 'nexttrack']);
+  }, { once: true });
+}
+
+// Wraps around the song list, the same way the sidebar switches songs.
+function mediaSessionStep(dir) {
+  if (!song || !songs.length) return;
+  const i = songs.findIndex(s => s.id === song.id);
+  location.hash = songs[(i + dir + songs.length) % songs.length].id;
+}
+
+function mediaSessionMetadata() {
+  if (!('mediaSession' in navigator) || !song) return;
+  try {
+    navigator.mediaSession.metadata = new MediaMetadata({
+      title: song.title,
+      artist: band.name,
+      album: `${song.date} · ${song.venue}`,
+      artwork: [{ src: new URL('apple-touch-icon.png', location.href).href, sizes: '180x180', type: 'image/png' }],
+    });
+  } catch (_) { /* MediaMetadata unavailable */ }
+}
+
+function mediaSessionState(on) {
+  if (!('mediaSession' in navigator)) return;
+  navigator.mediaSession.playbackState = on ? 'playing' : 'paused';
+  mediaSessionPosition();
+}
+
+// Keeps the lock-screen scrubber accurate. Called on play, pause, seek and
+// song load; the browser extrapolates between calls, so not every frame.
+function mediaSessionPosition() {
+  if (!('mediaSession' in navigator) || !navigator.mediaSession.setPositionState) return;
+  if (!channels.length || !(duration > 0)) return;
+  try {
+    navigator.mediaSession.setPositionState({
+      duration,
+      position: Math.max(0, Math.min(duration, position())),
+      playbackRate: 1,
+    });
+  } catch (_) { /* position outside duration */ }
 }
 
 // ---------- UI ----------
@@ -671,6 +779,7 @@ function renderHeader() {
   for (const btn of document.querySelectorAll('.song')) {
     btn.classList.toggle('on', btn.dataset.id === song.id);
   }
+  mediaSessionMetadata();
 }
 
 function renderSongList() {
@@ -729,6 +838,7 @@ async function loadSong(state) {
     ui.dur.textContent = fmt(duration);
     ui.seek.value = 0;
     ui.cur.textContent = fmt(0);
+    mediaSessionPosition();
     loading.hidden = true;
     mixer.hidden = false;
     document.getElementById('transport').hidden = false;
@@ -745,6 +855,7 @@ async function loadSong(state) {
 
 (async () => {
   wireTransport();
+  mediaSessionInstall();
   tick();
   try {
     [songs, bands] = await Promise.all([
