@@ -1,0 +1,35 @@
+[
+  {
+    "id": "1998-07-26-funky-bitch",
+    "band": "phish",
+    "title": "Funky Bitch",
+    "date": "1998-07-26",
+    "set": "Set I",
+    "venue": "Coca-Cola Starplex Amphitheater",
+    "city": "Dallas, TX",
+    "source": "Soundboard",
+    "dir": "audio/songs/1998-07-26-funky-bitch/"
+  },
+  {
+    "id": "1993-03-22-mikes-song",
+    "band": "phish",
+    "title": "Mike's Song",
+    "date": "1993-03-22",
+    "set": "Set II",
+    "venue": "Crest Theater",
+    "city": "Sacramento, CA",
+    "source": "Soundboard",
+    "dir": "audio/songs/1993-03-22-mikes-song/"
+  },
+  {
+    "id": "1997-03-29-wonderin",
+    "band": "widespread-panic",
+    "title": "Wonderin'",
+    "date": "1997-03-29",
+    "set": "Set I",
+    "venue": "Warfield Theater",
+    "city": "San Francisco, CA",
+    "source": "Soundboard",
+    "dir": "audio/songs/1997-03-29-wonderin/"
+  }
+]
