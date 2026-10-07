@@ -357,17 +357,25 @@ function parseHash() {
   return state;
 }
 
+// The mixer's current mute, solo and fader state, in the shape a hash or a
+// guide tip carries it: only non-default gains are listed.
+function mixState() {
+  return {
+    solo: channels.filter(c => c.solo).map(c => c.def.id),
+    mute: channels.filter(c => c.mute).map(c => c.def.id),
+    gains: Object.fromEntries(channels
+      .map(c => [c.def.id, Number(c.ui.fader.value)])
+      .filter(([, g]) => g !== 1)),
+  };
+}
+
 function buildHash() {
   const parts = [song.id];
-  const solo = channels.filter(c => c.solo).map(c => c.def.id);
-  const mute = channels.filter(c => c.mute).map(c => c.def.id);
-  const gains = channels
-    .map(c => [c.def.id, Number(c.ui.fader.value)])
-    .filter(([, g]) => g !== 1)
-    .map(([id, g]) => id + ':' + g);
+  const { solo, mute, gains } = mixState();
+  const gainList = Object.entries(gains).map(([id, g]) => id + ':' + g);
   if (solo.length) parts.push('solo=' + solo.join(','));
   if (mute.length) parts.push('mute=' + mute.join(','));
-  if (gains.length) parts.push('g=' + gains.join(','));
+  if (gainList.length) parts.push('g=' + gainList.join(','));
   const t = Math.round(hashPos || 0);
   if (t > 0) parts.push('t=' + t);
   if (guideParam) parts.push('guide=' + guideParam);
@@ -521,6 +529,7 @@ function pause() {
   playing = false;
   keepaliveStop();
   guideWaiting = false;
+  stopLoop();
   setPlayButton(false);
   writePosition();
 }
@@ -545,11 +554,19 @@ function seek(to) {
   mediaSessionPosition();
 }
 
+// Keys typed into a text field belong to the field, not the player.
+function isTyping(el) {
+  if (!el) return false;
+  if (el.tagName === 'TEXTAREA' || el.isContentEditable) return true;
+  return el.tagName === 'INPUT' && !['range', 'checkbox', 'button'].includes(el.type);
+}
+
 // Left and Right arrows step the playhead 5 s either way, through seek() so
 // the play state is kept. preventDefault stops a focused fader or the seek
 // bar from stepping as well.
 function wireNudgeKeys() {
   document.addEventListener('keydown', e => {
+    if (isTyping(e.target)) return;
     if (!channels.length || e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return;
     if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
     e.preventDefault();
@@ -644,27 +661,26 @@ function mediaSessionPosition() {
 
 // ---------- guides ----------
 //
-// A guide is a listening tour of a song: an ordered list of stops, each a
-// moment, a mix, and a note. The mix holds from the stop until the next one.
-// When the playhead crosses into a stop its note is shown; a stop marked
-// `pause` also stops the music until the listener presses Continue. The text
-// form is the format:
+// A guide is a listening tour of a song: an ordered list of tips, each a
+// passage, a mix, and a note. The mix holds for the passage; between tips
+// the band plays in full. When the playhead crosses into a tip its note is
+// shown; a tip marked `pause` also stops the music until the listener
+// presses Continue. The text form is the format:
 //
 //   lang: en
 //   title: Spotlight
 //   by: Moshe Weitzman
 //   url: https://weitzman.github.io
-//   0:00 solo=drums | Fish alone on drums.
-//   0:30 solo=drums,bass pause | Mike joins. Listen for the push and pull.
-//   1:00 | Everyone back in.
+//   0:00 to=0:30 solo=drums | Fish alone on drums.
+//   0:30 to=1:00 solo=drums,bass pause | Mike joins. Listen for the push and pull.
 //
 // Header lines are `key: value` (title, lang, by, url; lang is the notes'
 // language code, which the page passes on to the browser; by and url name
-// and link the author). Stop lines start with
-// m:ss, then any of solo=, mute=, g= (as in the hash), to=m:ss (where the
-// stop ends, when not at the next stop; a later stop may start earlier, which
-// is how a passage is replayed) and pause, then `|` and the note. A stop with
-// no mix keys brings everyone back. The hash carries a guide as
+// and link the author). Tip lines start with
+// m:ss, then any of to=m:ss (where the tip ends; without it, at the next
+// tip), solo=, mute=, g= (as in the hash) and pause, then `|` and the note.
+// A later tip may start earlier than the one before it ends, which is how a
+// passage is replayed. The hash carries a guide as
 // guide=<name> for a built-in template, or guide=z<base64url of the deflated
 // text> for one written by hand; SplitOpen.guideLink(text) in the console
 // makes such a link.
@@ -680,18 +696,17 @@ const GUIDE_TEMPLATES = {
       const stems = order.map(id => STEMS.find(s => s.id === id)).filter(Boolean);
       const seg = Math.max(10, Math.min(30, Math.floor(duration / (stems.length + 1))));
       const alone = s => s.id === 'vocals' ? 'Just the vocals.' : `${s.who} alone on ${s.inst.toLowerCase()}.`;
-      const stops = stems.map((s, i) => ({ ...emptyStop(i * seg), solo: [s.id], note: alone(s) }));
-      stops[0].note = `Each player alone in turn, then everyone together. First, ${alone(stems[0]).replace(/\.$/, '')}. `
+      const tips = stems.map((s, i) => ({ ...emptyTip(i * seg), to: (i + 1) * seg, solo: [s.id], note: alone(s) }));
+      tips[0].note = `Each player alone in turn, then everyone together. First, ${alone(stems[0]).replace(/\.$/, '')}. `
         + 'Listen for how the kick and snare lock to the hi-hat, where the fills land against the bar line, '
         + 'and how the tempo breathes between sections. With nothing else in the way, the drums tell you '
         + 'where the band is headed before anyone else does.';
-      stops.push({ ...emptyStop(stems.length * seg), note: 'Everyone back in.' });
-      return stops;
+      return tips;
     },
   },
 };
 
-function emptyStop(at) {
+function emptyTip(at) {
   return { at, to: null, solo: [], mute: [], gains: {}, pause: false, note: '' };
 }
 
@@ -701,7 +716,7 @@ function parseClock(s) {
 }
 
 function parseGuideText(text) {
-  const g = { title: '', lang: '', by: '', url: '', stops: [] };
+  const g = { title: '', lang: '', by: '', url: '', tips: [] };
   for (let line of text.split('\n')) {
     line = line.trim();
     if (!line || line.startsWith('#')) continue;
@@ -711,23 +726,23 @@ function parseGuideText(text) {
       if (h) g[h[1].toLowerCase()] = h[2].trim();
       continue;
     }
-    const stop = emptyStop(parseClock(m[1]));
-    stop.note = (m[3] || '').trim();
+    const tip = emptyTip(parseClock(m[1]));
+    tip.note = (m[3] || '').trim();
     for (const tok of m[2].trim().split(/\s+/).filter(Boolean)) {
       const eq = tok.indexOf('=');
       const key = eq < 0 ? tok : tok.slice(0, eq);
       const val = eq < 0 ? '' : tok.slice(eq + 1);
-      if (key === 'solo' || key === 'mute') stop[key] = parseStemList(val);
-      else if (key === 'g') stop.gains = parseGains(val);
-      else if (key === 'to') stop.to = parseClock(val);
-      else if (key === 'pause') stop.pause = true;
+      if (key === 'solo' || key === 'mute') tip[key] = parseStemList(val);
+      else if (key === 'g') tip.gains = parseGains(val);
+      else if (key === 'to') tip.to = parseClock(val);
+      else if (key === 'pause') tip.pause = true;
     }
-    g.stops.push(stop);
+    g.tips.push(tip);
   }
   return g;
 }
 
-// deflate + base64url, so a hand-written guide fits in a link: a dozen stops
+// deflate + base64url, so a hand-written guide fits in a link: a dozen tips
 // with a sentence each come to roughly a kilobyte.
 function b64urlEncode(bytes) {
   let s = '';
@@ -764,16 +779,16 @@ window.SplitOpen = {
 };
 
 let guideParam = null;  // the hash's guide=, kept while the guide itself loads
-let guide = null;       // { param, title, lang, stops }
-let guideIndex = -1;    // the stop the playhead is in; -1 before the first
-let guideWaiting = false; // paused by a `pause` stop, waiting for Continue
+let guide = null;       // { param, title, lang, tips }
+let guideIndex = -1;    // the tip the playhead is in; -1 before the first
+let guideWaiting = false; // paused by a `pause` tip, waiting for Continue
 
 async function resolveGuide(param) {
   const tpl = GUIDE_TEMPLATES[param];
-  if (tpl) return { param, title: tpl.title, lang: tpl.lang, by: tpl.by || '', url: tpl.url || '', stops: tpl.build() };
+  if (tpl) return { param, title: tpl.title, lang: tpl.lang, by: tpl.by || '', url: tpl.url || '', tips: tpl.build() };
   const g = parseGuideText(await decodeGuide(param));
   if (!/^https?:\/\//i.test(g.url)) g.url = ''; // only web links, never javascript:
-  return { param, title: g.title || 'Guide', lang: g.lang || 'en', by: g.by, url: g.url, stops: g.stops };
+  return { param, title: g.title || 'Guide', lang: g.lang || 'en', by: g.by, url: g.url, tips: g.tips };
 }
 
 // Brings the open guide in line with the hash's guide= value.
@@ -788,7 +803,7 @@ async function syncGuide(state) {
     g = await resolveGuide(want);
   } catch (err) {
     console.error(err);
-    g = { param: want, title: 'Guide', lang: 'en', by: '', url: '', stops: [], error: 'This link holds a guide this browser cannot read.' };
+    g = { param: want, title: 'Guide', lang: 'en', by: '', url: '', tips: [], error: 'This link holds a guide this browser cannot read.' };
   }
   if (!channels.length || guideParam !== want) return; // moved on meanwhile
   openGuide(g);
@@ -804,12 +819,15 @@ function openGuide(g) {
 
 function closeGuide(write = true) {
   if (!guide) return;
+  clearTimeout(draftTimer);
   guideWaiting = false;
   guide = null;
   guideParam = null;
   guideIndex = -1;
   ui.guide.hidden = true;
+  ui.mixer.hidden = !channels.length;
   ui.marks.innerHTML = '';
+  loopTip = null;
   renderGuideChips();
   if (write) writeHash();
 }
@@ -819,77 +837,126 @@ function setGuide(param) {
 }
 
 function guideEnd(i) {
-  const stops = guide.stops;
-  if (stops[i].to !== null) return stops[i].to;
-  const next = stops[i + 1];
-  return next && next.at > stops[i].at ? next.at : duration;
+  const tips = guide.tips;
+  if (tips[i].to !== null) return tips[i].to;
+  const next = tips[i + 1];
+  return next && next.at > tips[i].at ? next.at : duration;
 }
 
-function inStop(i, pos) {
-  return pos >= guide.stops[i].at && pos < guideEnd(i);
+function inTip(i, pos) {
+  return pos >= guide.tips[i].at && pos < guideEnd(i);
 }
 
-// After the listener moves the playhead: find the stop that holds it, keeping
-// the current one when it still does, and enter it. Landing at a stop's start
-// counts as arriving there (so a `pause` stop pauses); landing inside it does
-// not.
+// While writing, the mixer is the author's: the guide highlights tips but
+// leaves the mix alone (the jump button still previews a tip's mix).
+function guideOwnsMix() {
+  return !guide.editing;
+}
+
+// After the listener moves the playhead: find the tip that holds it, keeping
+// the current one when it still does, and enter it; outside every tip the
+// band plays in full. Landing at a tip's start counts as arriving there (so
+// a `pause` tip pauses); landing inside it does not.
 function guideSync(arrive) {
-  if (!guide || !guide.stops.length) return;
+  if (!guide) return;
   guideWaiting = false;
+  if (arrive) stopLoop(); // the listener moved the playhead themselves
   const pos = position();
-  const stops = guide.stops;
-  let i = guideIndex >= 0 && inStop(guideIndex, pos) ? guideIndex : stops.findIndex((s, k) => inStop(k, pos));
-  if (i < 0) for (let k = 0; k < stops.length; k++) if (stops[k].at <= pos) i = k;
-  if (i < 0) { guideIndex = -1; renderGuideNow(); return; }
-  if (i !== guideIndex) enterStop(i, arrive && pos - stops[i].at < 1.5);
+  const tips = guide.tips;
+  const i = guideIndex >= 0 && inTip(guideIndex, pos) ? guideIndex : tips.findIndex((t, k) => inTip(k, pos));
+  if (i < 0) leaveTips();
+  else if (i !== guideIndex) enterTip(i, arrive && pos - tips[i].at < 1.5);
   else renderGuideNow();
 }
 
-// Each frame while playing: once the current stop has run out, move to the
-// next one, jumping to it when it starts elsewhere.
+// Each frame while playing: once the current tip has run out, move to the
+// next one if it starts here (or earlier, which replays the passage); else
+// let the band play in full until the next tip begins.
 function guideTick(pos) {
-  if (!guide || !playing || !guide.stops.length) return;
-  const stops = guide.stops;
-  if (guideIndex >= 0 && pos < stops[guideIndex].at - 0.1) return guideSync(true);
+  if (!guide || !playing || !guide.tips.length) return;
+  const tips = guide.tips;
+  if (loopTip !== null) {
+    const tip = tips[loopTip];
+    if (!tip) return stopLoop();
+    if (pos >= guideEnd(loopTip) - 0.05 || pos < tip.at - 0.1) seek(tip.at);
+    return;
+  }
+  if (guideIndex >= 0 && pos < tips[guideIndex].at - 0.1) return guideSync(true);
   if (guideIndex >= 0 && pos < guideEnd(guideIndex)) return;
-  const next = guideIndex + 1;
-  if (next >= stops.length || pos < stops[next].at - 0.25) return;
-  if (Math.abs(pos - stops[next].at) > 0.5) seek(stops[next].at);
-  enterStop(next, true);
+  const next = guideIndex >= 0 ? guideIndex + 1 : tips.findIndex((t, k) => pos >= t.at - 0.25 && pos < guideEnd(k));
+  if (guideIndex >= 0 && next < tips.length && tips[next].at < pos - 0.5) {
+    seek(tips[next].at);
+    return enterTip(next, true);
+  }
+  if (next >= 0 && next < tips.length && pos >= tips[next].at - 0.25) return enterTip(next, true);
+  if (guideIndex >= 0) leaveTips();
 }
 
-// On Play: find the stop under the playhead, since the song may have been
+// On Play: find the tip under the playhead, since the song may have been
 // started over from the top.
 function guideResume() {
   guideSync(false);
 }
 
-// Applies the stop's mix and shows its note. `arrive` means the playhead has
-// just reached the stop (as opposed to the guide being opened or the playhead
-// dropped somewhere inside it), which is when a `pause` stop pauses.
-function enterStop(i, arrive) {
-  const stop = guide.stops[i];
-  guideIndex = i;
+function setMix(mix) {
   for (const c of channels) {
-    c.solo = stop.solo.includes(c.def.id);
-    c.mute = stop.mute.includes(c.def.id);
-    const g = stop.gains[c.def.id] ?? 1;
+    c.solo = mix.solo.includes(c.def.id);
+    c.mute = mix.mute.includes(c.def.id);
+    const g = mix.gains[c.def.id] ?? 1;
     c.ui.fader.value = g;
     c.fader.gain.setTargetAtTime(g, ctx.currentTime, 0.01);
   }
   applyMuteSolo();
-  if (arrive && stop.pause && playing) {
+}
+
+// The playhead has left the last tip without entering another.
+function leaveTips() {
+  const was = guideIndex;
+  guideIndex = -1;
+  if (was >= 0 && guideOwnsMix()) setMix({ solo: [], mute: [], gains: {} });
+  renderGuideNow();
+}
+
+// Applies the tip's mix and shows its note. `arrive` means the playhead has
+// just reached the tip (as opposed to the guide being opened or the playhead
+// dropped somewhere inside it), which is when a `pause` tip pauses.
+function enterTip(i, arrive, applyMix = guideOwnsMix()) {
+  const tip = guide.tips[i];
+  guideIndex = i;
+  if (applyMix) setMix(tip);
+  if (arrive && tip.pause && playing && !guide.editing) {
     pause();
     guideWaiting = true;
   }
   renderGuideNow();
 }
 
-function guideMixLabel(stop) {
-  const names = ids => ids.map(id => (STEMS.find(s => s.id === id) || {}).who || id).join(', ');
-  if (stop.solo.length) return 'Solo ' + names(stop.solo);
-  if (stop.mute.length) return 'Mute ' + names(stop.mute);
-  return 'Full mix';
+// "Fish · Solo", "Mike, Fish · Solo", "Vocals · Mute" or "Full mix".
+function mixParts(tip) {
+  const stems = ids => ids.map(id => STEMS.find(s => s.id === id) || { id, who: id, color: '' });
+  if (tip.solo.length) return { stems: stems(tip.solo), what: 'Solo' };
+  if (tip.mute.length) return { stems: stems(tip.mute), what: 'Mute' };
+  return { stems: [], what: 'Full mix' };
+}
+
+function guideMixLabel(tip) {
+  const { stems, what } = mixParts(tip);
+  return stems.length ? stems.map(s => s.who).join(', ') + ' \u00b7 ' + what : what;
+}
+
+// The same label as elements, each player's name in their color.
+function renderMixLabel(el, tip) {
+  const { stems, what } = mixParts(tip);
+  el.innerHTML = '';
+  stems.forEach((s, i) => {
+    const name = document.createElement('span');
+    name.className = 'who';
+    name.style.color = s.color;
+    name.textContent = s.who;
+    if (i) el.append(', ');
+    el.appendChild(name);
+  });
+  el.append(stems.length ? ' \u00b7 ' + what : what);
 }
 
 // Fills a note element with text clamped to `lines` lines and shows its
@@ -912,8 +979,27 @@ function wireMore(noteEl, moreBtn) {
 }
 
 function renderGuide() {
+  const editing = !!guide.editing;
+  const describing = editing && !!guide.describing;
   ui.guide.hidden = false;
+  ui.guide.classList.toggle('editing', editing);
+  ui.guide.classList.toggle('describing', describing);
+  ui.mixer.hidden = describing; // describing is all about the tips; the mixer makes way
   ui.guide.lang = guide.lang; // the notes' language, for screen readers and hyphenation
+  ui.guideKicker.textContent = describing ? 'Describing tips' : editing ? 'Marking tips' : 'Guide';
+  ui.guideTitle.hidden = editing;
+  ui.guideAdd.hidden = !editing || describing;
+  // Describe waits until there is a finished tip and none still open, so
+  // marking comes before writing.
+  const finished = guide.tips.some(t => !t.pending);
+  const open = guide.tips.some(t => t.pending);
+  ui.guideDescribe.hidden = !editing || (!describing && (!finished || open));
+  ui.guideDescribe.textContent = describing ? 'Back to tips' : 'Describe';
+  renderTipButton();
+  ui.guideEdit.textContent = editing ? 'Save' : 'Copy & edit';
+  ui.guideEdit.title = editing ? 'Finish writing; the guide stays in the link' : 'Copy this guide into one of your own and change it';
+  // Save appears once there is a finished tip to save.
+  ui.guideEdit.hidden = editing ? !finished : (!!guide.error || !window.CompressionStream);
   ui.guideTitle.textContent = guide.title;
   if (guide.by) {
     ui.guideTitle.append(', by ');
@@ -927,64 +1013,84 @@ function renderGuide() {
     }
     ui.guideTitle.appendChild(who);
   }
-  ui.guideStops.innerHTML = '';
+  ui.guideTips.innerHTML = '';
   ui.marks.innerHTML = '';
-  guide.stops.forEach((stop, i) => {
+  guide.tips.forEach((tip, i) => {
+    const mark = document.createElement('i');
+    mark.style.left = (tip.at / duration * 100).toFixed(2) + '%';
+    if (tip.to !== null) mark.style.width = 'max(2px, ' + ((tip.to - tip.at) / duration * 100).toFixed(2) + '%)';
+    mark.title = tipSpan(tip) + '  ' + (tip.note || guideMixLabel(tip));
+    mark.addEventListener('click', () => goToTip(i));
+    ui.marks.appendChild(mark);
+    if (editing) {
+      ui.guideTips.appendChild(describing ? buildDescribeCard(tip, i) : buildEditRow(tip, i));
+      return;
+    }
     const li = document.createElement('li');
     const btn = document.createElement('button');
-    btn.className = 'stop';
+    btn.className = 'tip';
     const time = document.createElement('time');
-    time.textContent = fmt(stop.at);
-    const text = document.createElement('span');
-    text.className = 'note';
+    time.textContent = tipSpan(tip);
+    const body = document.createElement('span');
+    body.className = 'body';
+    const mix = document.createElement('span');
+    mix.className = 'mix';
+    renderMixLabel(mix, tip);
+    body.appendChild(mix);
     const more = document.createElement('button');
     more.className = 'more';
-    renderNote(text, more, stop.note || guideMixLabel(stop), 2);
-    wireMore(text, more);
-    btn.append(time, text);
-    btn.addEventListener('click', () => {
-      guideWaiting = false;
-      seek(stop.at);
-      writePosition();
-      enterStop(i, true);
-    });
+    if (tip.note) {
+      const text = document.createElement('span');
+      text.className = 'note';
+      renderNote(text, more, tip.note, 2);
+      wireMore(text, more);
+      body.appendChild(text);
+    } else {
+      more.hidden = true;
+    }
+    btn.append(time, body);
+    btn.addEventListener('click', () => goToTip(i));
     li.append(btn, more);
-    ui.guideStops.appendChild(li);
-
-    const mark = document.createElement('i');
-    mark.style.left = (stop.at / duration * 100).toFixed(2) + '%';
-    mark.title = fmt(stop.at) + '  ' + (stop.note || guideMixLabel(stop));
-    mark.addEventListener('click', () => btn.click());
-    ui.marks.appendChild(mark);
+    ui.guideTips.appendChild(li);
   });
   renderGuideChips();
   renderGuideNow();
 }
 
-// The current stop is highlighted in the list and shown in full; the others
-// are clamped (the listener can still open any of them with "more").
+// "0:32–0:48", or just the start for a tip that runs to the next one.
+function tipSpan(tip) {
+  if (tip.pending) return fmt(tip.at) + '–…';
+  return tip.to === null ? fmt(tip.at) : fmt(tip.at) + '–' + fmt(tip.to);
+}
+
+function goToTip(i) {
+  guideWaiting = false;
+  seek(guide.tips[i].at);
+  writePosition();
+  enterTip(i, true, true);
+}
+
+// The current tip is highlighted in the list; long notes stay clamped
+// behind "more" until the listener opens them.
 function renderGuideNow() {
   if (!guide) return;
-  ui.guideStatus.textContent = guide.error || '';
-  ui.guideStatus.hidden = !guide.error;
+  const hint = !guide.editing || guide.tips.length ? ''
+    : guide.describing ? 'No tips yet. Go back to tips and mark a passage first.'
+    : 'Play the song, set mute/solo, and click <em>Tip: Start</em> where a passage worth a tip begins. '
+      + 'When done adding tips and descriptions, click <em>Share</em> '
+      + '<svg class="inline-icon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 10H6.5A1.5 1.5 0 0 0 5 11.5v8A1.5 1.5 0 0 0 6.5 21h11a1.5 1.5 0 0 0 1.5-1.5v-8a1.5 1.5 0 0 0-1.5-1.5H16"/><path d="M12 15V3M8 7l4-4 4 4"/></svg>'
+      + ' to send a link to your creation.';
+  if (guide.error) ui.guideStatus.textContent = guide.error;
+  else ui.guideStatus.innerHTML = hint; // our own copy, no user text
+  ui.guideStatus.hidden = !(guide.error || hint);
+  ui.guideStatus.classList.toggle('error', !!guide.error);
   ui.guideContinue.hidden = !guideWaiting;
-  Array.from(ui.guideStops.children).forEach((li, i) => {
-    const on = i === guideIndex;
-    if (on === li.classList.contains('on')) return;
-    li.classList.toggle('on', on);
-    const note = li.querySelector('.note');
-    const more = li.querySelector('.more');
-    if (on) {
-      note.classList.remove('clamp');
-      more.hidden = true;
-    } else {
-      renderNote(note, more, note.textContent, 2);
-    }
-  });
+  Array.from(ui.guideTips.children).forEach((li, i) => li.classList.toggle('on', i === guideIndex));
   Array.from(ui.marks.children).forEach((mark, i) => mark.classList.toggle('on', i === guideIndex));
-  // Keep the current stop in view within the list only; scrollIntoView
+  Array.from(ui.guideTips.children).forEach((li, i) => li.classList.toggle('looping', i === loopTip));
+  // Keep the current tip in view within the list only; scrollIntoView
   // would drag the whole page along on a phone.
-  const list = ui.guideStops;
+  const list = ui.guideTips;
   const on = list.children[guideIndex];
   if (on) {
     if (on.offsetTop < list.scrollTop) list.scrollTop = on.offsetTop;
@@ -1010,7 +1116,7 @@ function renderGuideChips() {
   for (const { param, title, by } of entries) {
     const btn = document.createElement('button');
     btn.className = 'song chip';
-    btn.textContent = title;
+    btn.textContent = title || 'Untitled guide';
     if (by) {
       const small = document.createElement('small');
       small.textContent = by;
@@ -1018,10 +1124,17 @@ function renderGuideChips() {
     }
     btn.classList.toggle('on', !!guide && guide.param === param);
     btn.addEventListener('click', () => {
-      if (!channels.length) return;
+      if (!channels.length || !leaveDraftOk()) return;
       if (guide && guide.param === param) closeGuide();
       else setGuide(param);
     });
+    row.appendChild(btn);
+  }
+  if (window.CompressionStream && !(guide && guide.editing)) {
+    const btn = document.createElement('button');
+    btn.className = 'song chip new';
+    btn.textContent = '+ New guide';
+    btn.addEventListener('click', newGuide);
     row.appendChild(btn);
   }
 }
@@ -1030,11 +1143,296 @@ function wireGuide() {
   ui.guide = document.getElementById('guide');
   ui.guideTitle = document.getElementById('guide-title');
   ui.guideStatus = document.getElementById('guide-status');
-  ui.guideStops = document.getElementById('guide-stops');
+  ui.guideTips = document.getElementById('guide-tips');
   ui.guideContinue = document.getElementById('guide-continue');
   ui.marks = document.getElementById('marks');
+  ui.guideKicker = document.getElementById('guide-kicker');
+  ui.guideAdd = document.getElementById('guide-add');
+  ui.guideDescribe = document.getElementById('guide-describe');
+  ui.guideEdit = document.getElementById('guide-edit');
+  ui.mixer = document.getElementById('mixer');
+  ui.guideDescribe.addEventListener('click', toggleDescribe);
   ui.guideContinue.addEventListener('click', () => { guideWaiting = false; play(); });
-  document.getElementById('guide-close').addEventListener('click', () => closeGuide());
+  ui.guideAdd.addEventListener('click', toggleTip);
+  ui.guideEdit.addEventListener('click', () => (guide && guide.editing ? finishEditing() : editGuide()));
+  document.getElementById('guide-close').addEventListener('click', () => { if (leaveDraftOk()) closeGuide(); });
+}
+
+// ---------- guide authoring ----------
+//
+// A guide is written in the player itself. Start a new one (or edit the open
+// one), play the song, set the mix, and press N (Tip: Start) where a passage
+// worth a tip begins and again (Tip: End) where it ends: the tip takes that
+// passage and the mix in force when it started, and its note is typed in
+// place. The draft is re-encoded into the hash as it changes, so Share hands
+// it out and a reload brings it back. A draft never pauses at its own
+// `pause` tips.
+// The title, author and language are not asked for here; they come later,
+// when a guide is offered to the library.
+
+let draftTimer = null;
+let draftSeq = 0;
+
+function clock(s) {
+  const tenths = Math.round(s * 10);
+  const frac = tenths % 10;
+  return fmt(Math.floor(tenths / 10)) + (frac ? '.' + frac : '');
+}
+
+// The text form of a guide, the inverse of parseGuideText.
+function guideText(g) {
+  const lines = [];
+  if (g.title) lines.push('title: ' + g.title);
+  if (g.lang) lines.push('lang: ' + g.lang);
+  if (g.by) lines.push('by: ' + g.by);
+  if (g.url) lines.push('url: ' + g.url);
+  for (const s of g.tips) {
+    const keys = [];
+    if (s.solo.length) keys.push('solo=' + s.solo.join(','));
+    if (s.mute.length) keys.push('mute=' + s.mute.join(','));
+    const gains = Object.entries(s.gains).filter(([, v]) => v !== 1).map(([id, v]) => id + ':' + v);
+    if (gains.length) keys.push('g=' + gains.join(','));
+    if (s.to !== null) keys.push('to=' + clock(s.to));
+    if (s.pause) keys.push('pause');
+    lines.push([clock(s.at), ...keys].join(' ') + ' | ' + s.note.replace(/\s*\n\s*/g, ' ').trim());
+  }
+  return lines.join('\n') + '\n';
+}
+
+function leaveDraftOk() {
+  if (!guide || !guide.editing || !guide.tips.length) return true;
+  return confirm('Leave the guide you are writing? Share it first to keep a link.');
+}
+
+function newGuide() {
+  if (!channels.length || !leaveDraftOk()) return;
+  closeGuide(false);
+  const lang = (navigator.language || 'en').split('-')[0].toLowerCase();
+  openGuide({ param: null, title: '', lang, by: '', url: '', tips: [], editing: true });
+  draftChanged();
+}
+
+// Turns the open guide into a draft of its own: a template becomes a
+// starting point, a shared guide a copy to revise. The copy is the new
+// author's, so it is named after its source and the credit is left for
+// them to give later.
+function editGuide() {
+  if (!guide || guide.editing || guide.error) return;
+  guide = {
+    ...guide,
+    param: null,
+    editing: true,
+    title: guide.title ? guide.title + ' (copy)' : '',
+    by: '',
+    url: '',
+    tips: guide.tips.map(s => ({ ...s, solo: [...s.solo], mute: [...s.mute], gains: { ...s.gains } })),
+  };
+  guideIndex = -1;
+  renderGuide();
+  guideSync(false);
+  draftChanged();
+}
+
+async function finishEditing() {
+  if (!guide || !guide.editing) return;
+  const pending = guide.tips.find(t => t.pending);
+  if (pending) endTip(pending);
+  clearTimeout(draftTimer);
+  draftSeq++;
+  guide.editing = false;
+  guide.describing = false;
+  stopLoop();
+  guide.param = guideParam = await encodeGuide(guideText(guide));
+  guideIndex = -1;
+  renderGuide();
+  guideSync(false);
+  writeHash();
+}
+
+// Re-encodes the draft into the hash shortly after it last changed.
+function draftChanged() {
+  if (!guide || !guide.editing) return;
+  const seq = ++draftSeq;
+  clearTimeout(draftTimer);
+  draftTimer = setTimeout(async () => {
+    const param = await encodeGuide(guideText(guide));
+    if (seq !== draftSeq || !guide || !guide.editing) return;
+    guide.param = guideParam = param;
+    writeHash();
+    renderGuideChips();
+  }, 300);
+}
+
+// Tip: Start opens a tip at the playhead with the mixer's current state,
+// placed among the others by time (a replayed passage can be dragged into
+// place); Tip: End closes it at the playhead.
+function toggleTip() {
+  if (!guide || !guide.editing || guide.describing || !channels.length) return;
+  const pending = guide.tips.find(t => t.pending);
+  if (pending) return endTip(pending);
+  const at = Math.round(position() * 10) / 10;
+  const tip = { ...emptyTip(at), ...mixState(), pending: true };
+  let i = 0;
+  while (i < guide.tips.length && guide.tips[i].at <= at) i++;
+  guide.tips.splice(i, 0, tip);
+  tipsChanged();
+}
+
+function endTip(tip) {
+  const pos = Math.round(position() * 10) / 10;
+  tip.to = Math.min(duration, Math.max(tip.at + 1, pos));
+  delete tip.pending;
+  tipsChanged();
+}
+
+function renderTipButton() {
+  const pending = !!guide && guide.tips.some(t => t.pending);
+  ui.guideAdd.textContent = pending ? 'Tip: End' : 'Tip: Start';
+  ui.guideAdd.classList.toggle('pending', pending);
+  ui.guideAdd.title = pending
+    ? 'End the tip here (N)'
+    : 'Start a tip here, with the current mix (N)';
+}
+
+// After a tip is added, removed, moved or re-timed: rebuild the list and
+// ticks and find the current tip afresh, since the indexes have shifted.
+function tipsChanged() {
+  guideIndex = -1;
+  renderGuide();
+  guideSync(false);
+  draftChanged();
+}
+
+function buildEditRow(tip, i) {
+  const li = document.createElement('li');
+  li.className = 'edit' + (tip.pending ? ' pending' : '');
+  li.tip = tip;
+  li.innerHTML = `
+    <div class="edit-row">
+      <span class="handle" title="Drag to reorder" aria-label="Drag to reorder">&#8942;&#8942;</span>
+      <span class="mix"></span>
+      <span class="span">
+        <input class="at" type="text" inputmode="decimal" size="5" aria-label="Start" title="Start, m:ss">
+        <span class="dash">&ndash;</span>
+        <input class="to" type="text" inputmode="decimal" size="5" aria-label="End" title="End, m:ss">
+      </span>
+      <button class="mini go" title="Jump here" aria-label="Jump here">&#9654;</button>
+      <span class="spacer"></span>
+      <button class="mini del" title="Remove this tip" aria-label="Remove this tip">&times;</button>
+    </div>`;
+  const at = li.querySelector('.at');
+  const to = li.querySelector('.to');
+  at.value = clock(tip.at);
+  to.value = tip.pending ? '…' : tip.to === null ? '' : clock(tip.to);
+  to.disabled = !!tip.pending;
+  renderMixLabel(li.querySelector('.mix'), tip);
+
+  at.addEventListener('change', () => {
+    const t = parseClock(at.value.trim());
+    if (t === null) { at.value = clock(tip.at); return; }
+    tip.at = Math.max(0, Math.min(duration, t));
+    if (tip.to !== null && tip.to <= tip.at) tip.to = Math.min(duration, tip.at + 1);
+    tipsChanged();
+  });
+  to.addEventListener('change', () => {
+    const t = to.value.trim() ? parseClock(to.value.trim()) : null;
+    if (to.value.trim() && t === null) { to.value = tip.to === null ? '' : clock(tip.to); return; }
+    tip.to = t === null ? null : Math.max(tip.at + 1, Math.min(duration, t));
+    tipsChanged();
+  });
+  li.querySelector('.go').addEventListener('click', () => goToTip(i));
+  li.querySelector('.del').addEventListener('click', () => {
+    guide.tips.splice(i, 1);
+    tipsChanged();
+  });
+  wireDrag(li.querySelector('.handle'), li);
+  return li;
+}
+
+// Describing: the mixer gives way to one card per tip, each with a button
+// that plays its passage on a loop with the tip's own mix, so the author
+// hears exactly what they are writing about.
+let loopTip = null;
+
+function toggleDescribe() {
+  if (!guide || !guide.editing) return;
+  if (!guide.describing && guide.tips.some(t => t.pending)) return; // close the open tip first
+  guide.describing = !guide.describing;
+  stopLoop();
+  guideIndex = -1;
+  renderGuide();
+  guideSync(false);
+}
+
+function buildDescribeCard(tip, i) {
+  const li = document.createElement('li');
+  li.className = 'card';
+  li.innerHTML = `
+    <div class="card-head">
+      <button class="mini loop" title="Play this Tip in a loop" aria-label="Play this Tip in a loop">&#9654;</button>
+      <span class="mix"></span>
+      <span class="span"></span>
+    </div>
+    <textarea class="edit-note" rows="3" placeholder="What to listen for here"></textarea>`;
+  renderMixLabel(li.querySelector('.mix'), tip);
+  li.querySelector('.span').textContent = tipSpan(tip);
+  const note = li.querySelector('textarea');
+  note.value = tip.note;
+  note.addEventListener('input', () => {
+    tip.note = note.value;
+    ui.marks.children[i].title = tipSpan(tip) + '  ' + (tip.note || guideMixLabel(tip));
+    draftChanged();
+  });
+  li.querySelector('.loop').addEventListener('click', () => (loopTip === i ? pause() : startLoop(i)));
+  return li;
+}
+
+function startLoop(i) {
+  const tip = guide.tips[i];
+  loopTip = i;
+  setMix(tip);
+  seek(tip.at);
+  enterTip(i, false, false);
+  if (!playing) play();
+  renderGuideNow();
+}
+
+function stopLoop() {
+  if (loopTip === null) return;
+  loopTip = null;
+  if (guide) renderGuideNow();
+}
+
+// Reordering by drag: the handle captures the pointer, the row follows it
+// past its neighbours' midpoints, and the list's new order becomes the
+// guide's when the pointer lifts.
+function wireDrag(handle, li) {
+  handle.addEventListener('pointerdown', e => {
+    e.preventDefault();
+    try { handle.setPointerCapture(e.pointerId); } catch (_) { /* no live pointer (synthetic event) */ }
+    li.classList.add('dragging');
+    const list = ui.guideTips;
+    const move = ev => {
+      const rows = Array.from(list.children);
+      const cur = rows.indexOf(li);
+      for (const row of rows) {
+        if (row === li) continue;
+        const r = row.getBoundingClientRect();
+        const idx = rows.indexOf(row);
+        if (idx < cur && ev.clientY < r.top + r.height / 2) { list.insertBefore(li, row); break; }
+        if (idx > cur && ev.clientY > r.top + r.height / 2) { list.insertBefore(li, row.nextSibling); break; }
+      }
+    };
+    const up = () => {
+      handle.removeEventListener('pointermove', move);
+      li.classList.remove('dragging');
+      guide.tips = Array.from(list.children).map(row => row.tip);
+      tipsChanged();
+    };
+    handle.addEventListener('pointermove', move);
+    handle.addEventListener('pointerup', up, { once: true });
+    handle.addEventListener('pointercancel', up, { once: true });
+  });
 }
 
 // ---------- UI ----------
@@ -1127,10 +1525,12 @@ function wireTransport() {
   wireNudgeKeys();
 
   document.addEventListener('keydown', e => {
-    if (e.target.tagName === 'INPUT') e.target.blur();
+    if (isTyping(e.target)) return;
+    if (e.target.tagName === 'INPUT') e.target.blur(); // a focused fader or the seek bar
     if (!channels.length) return;
     if (e.code === 'Space') { e.preventDefault(); playing ? pause() : play(); return; }
     if (e.code === 'KeyL' && !e.metaKey && !e.ctrlKey && !e.altKey) { shareLink(); return; }
+    if (e.code === 'KeyN' && !e.metaKey && !e.ctrlKey && !e.altKey) { toggleTip(); return; }
     const n = Number(e.code.replace('Digit', ''));
     if (e.code.startsWith('Digit') && n >= 1 && n <= channels.length) {
       const c = channels[n - 1];
@@ -1210,6 +1610,7 @@ function renderSongList() {
     btn.innerHTML = `${s.title}<small>${who}</small>`;
     btn.addEventListener('click', () => {
       if (song && s.id === song.id) return;
+      if (!leaveDraftOk()) return;
       location.hash = s.id;
     });
     nav.appendChild(btn);

@@ -124,6 +124,7 @@ h1 {
 .loading-fill { height: 100%; width: 0%; background: var(--gold); transition: width 0.15s; }
 
 /* Mixer */
+.mixer[hidden] { display: none; }
 .mixer {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
@@ -287,7 +288,7 @@ h1 {
   }
 }
 
-/* Guide panel: the current note up top, the list of stops beneath. */
+/* Guide panel: the current note up top, the list of tips beneath. */
 .guide[hidden] { display: none; }
 .guide {
   background: var(--panel);
@@ -318,7 +319,9 @@ h1 {
 .guide-by { color: inherit; }
 a.guide-by { text-decoration: underline; text-underline-offset: 3px; }
 a.guide-by:hover { color: var(--gold); }
-.btn.guide-close { margin-left: auto; }
+/* Edit / Save keeps one spot, beside the close button, in every mode. */
+.btn.guide-edit { margin-left: auto; }
+.btn.guide-edit[hidden] + .btn.guide-close { margin-left: auto; }
 .btn.guide-close {
   min-width: 34px;
   padding: 0;
@@ -326,8 +329,95 @@ a.guide-by:hover { color: var(--gold); }
   line-height: 1;
   color: var(--muted);
 }
-.guide-status { margin: 0; color: var(--donut); }
+.guide-status { margin: 0; color: var(--muted); font-size: 14px; }
+.guide-status.error { color: var(--donut); }
+.guide-status .inline-icon { width: 15px; height: 15px; vertical-align: -3px; }
 .guide-status[hidden] { display: none; }
+.guide-head .btn[hidden] { display: none; }
+
+/* Writing a guide: one editable card per tip. */
+.edit-row input[type="text"], .edit-note {
+  min-width: 0;
+  padding: 6px 8px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: rgba(0,0,0,0.25);
+  color: var(--text);
+  font: 14px Inter, sans-serif;
+}
+.edit-row input:focus, .edit-note:focus { outline: 1px solid var(--gold); }
+.guide.editing .guide-tips { max-height: 60vh; }
+.guide-tips li.edit {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 6px;
+  border-radius: 8px;
+  color: var(--muted);
+}
+.guide-tips li.edit.on { background: rgba(255,255,255,0.05); color: var(--text); }
+.edit-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+  font-size: 13px;
+}
+.edit-row .span { display: inline-flex; align-items: center; gap: 4px; }
+.edit-row .at, .edit-row .to { width: 4.5em; font-variant-numeric: tabular-nums; text-align: center; }
+.edit-row .to:disabled { color: var(--muted); }
+.edit-row .mix { color: var(--text); }
+.edit-row .mix .who { font-family: Righteous, Inter, sans-serif; font-size: 15px; }
+.edit-row .spacer { flex: 1; }
+.handle {
+  cursor: grab;
+  color: var(--muted);
+  font-size: 16px;
+  letter-spacing: -4px;
+  padding: 0 4px 0 0;
+  user-select: none;
+  touch-action: none;
+}
+.guide-tips li.dragging { opacity: 0.6; background: rgba(242, 177, 52, 0.12); }
+.guide-tips li.dragging .handle { cursor: grabbing; }
+.guide-tips li.pending { border-left: 2px solid var(--gold); }
+
+/* Describing: one card per tip, the passage on top, the description below. */
+.guide.describing .guide-tips { max-height: none; }
+.guide-tips li.card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 10px;
+  margin: 6px 0;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: rgba(0,0,0,0.18);
+  color: var(--text);
+}
+.guide-tips li.card.looping { border-color: var(--gold); box-shadow: 0 0 10px rgba(242, 177, 52, 0.25); }
+.card-head { display: flex; align-items: center; gap: 10px; font-size: 14px; }
+.card-head .mix .who { font-family: Righteous, Inter, sans-serif; font-size: 16px; }
+.card-head .span { color: var(--muted); font-variant-numeric: tabular-nums; }
+.mini.loop { width: 32px; height: 32px; padding: 0; border-radius: 50%; }
+li.looping .mini.loop { background: var(--gold); border-color: var(--gold); color: #1a1200; }
+.btn.guide-add.pending { background: var(--gold); border-color: var(--gold); color: #1a1200; }
+.mini {
+  height: 28px;
+  min-width: 28px;
+  padding: 0 8px;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  background: rgba(255,255,255,0.06);
+  color: var(--text);
+  font: 600 12px Inter, sans-serif;
+  cursor: pointer;
+}
+.mini:hover { background: rgba(255,255,255,0.12); }
+.edit-note { width: 100%; resize: vertical; line-height: 1.4; }
+.song.chip.new { background: none; border-style: dashed; color: var(--muted); }
+.song.chip.new:hover { color: var(--text); }
+
 /* Long notes are clamped to a few lines, with a "more" link that shows the
    rest; the link only appears when there is more. */
 .note.clamp {
@@ -348,23 +438,23 @@ a.guide-by:hover { color: var(--gold); }
   text-underline-offset: 2px;
 }
 .more[hidden] { display: none; }
-.guide-stops li { display: flex; flex-wrap: wrap; }
-.guide-stops .more { margin: -4px 0 6px 54px; } /* under the text, clear of the time column */
+.guide-tips li { display: flex; flex-wrap: wrap; }
+.guide-tips .more { margin: -4px 0 6px 54px; } /* under the text, clear of the time column */
 .btn.continue {
   align-self: flex-start;
   background: var(--gold);
   border-color: var(--gold);
   color: #1a1200;
 }
-.guide-stops {
-  position: relative; /* so each stop's offsetTop is measured from the list */
+.guide-tips {
+  position: relative; /* so each tip's offsetTop is measured from the list */
   list-style: none;
   margin: 0;
   padding: 0;
   max-height: 240px;
   overflow-y: auto;
 }
-.guide-stops .stop {
+.guide-tips .tip {
   display: flex;
   gap: 12px;
   align-items: baseline;
@@ -379,10 +469,13 @@ a.guide-by:hover { color: var(--gold); }
   cursor: pointer;
   border-radius: 6px;
 }
-.guide-stops .stop:hover { background: rgba(255,255,255,0.06); color: var(--text); }
-.guide-stops li.on .stop { color: var(--text); font-size: 16px; }
-.guide-stops li.on .stop time { color: var(--gold); }
-.guide-stops time {
+.guide-tips .tip:hover { background: rgba(255,255,255,0.06); color: var(--text); }
+.guide-tips li.on .tip { color: var(--text); }
+.guide-tips .tip .body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.guide-tips .tip .mix { font-size: 13px; }
+.guide-tips .tip .mix .who { font-family: Righteous, Inter, sans-serif; font-size: 14px; }
+.guide-tips li.on .tip time { color: var(--gold); }
+.guide-tips time {
   font-variant-numeric: tabular-nums;
   flex-shrink: 0;
   min-width: 36px;
@@ -422,9 +515,10 @@ a.guide-by:hover { color: var(--gold); }
 .time { font-variant-numeric: tabular-nums; color: var(--muted); font-size: 14px; min-width: 44px; text-align: center; }
 .seek-wrap { flex: 1; min-width: 0; position: relative; display: flex; align-items: center; }
 .seek { flex: 1; min-width: 0; accent-color: var(--gold); cursor: pointer; }
-/* Guide stops are ticks over the seek bar, each with its note as a tooltip;
-   clicking one jumps to the stop. The row is inset by half the thumb so the
-   ticks line up with where the thumb lands. */
+/* Guide tips are marked over the seek bar: a span for the passage (a tick
+   when it runs to the next tip), each with its note as a tooltip; clicking
+   one jumps to the tip. The row is inset by half the thumb so the marks
+   line up with where the thumb lands. */
 .marks {
   position: absolute;
   left: 8px;
@@ -534,12 +628,17 @@ kbd {
 .btn.solo.hint {
   animation: solo-glow 2.4s ease-in-out infinite;
 }
+
+/* While describing, Save is the way out, so it pulses the way Play does. */
+.guide.describing .btn.guide-edit {
+  animation: play-pulse 2.2s ease-out infinite;
+}
 @keyframes solo-glow {
   0%, 100% { box-shadow: 0 0 0 0 rgba(255,255,255,0); border-color: var(--line); }
   50%      { box-shadow: 0 0 8px color-mix(in srgb, var(--c) 45%, transparent); border-color: color-mix(in srgb, var(--c) 60%, var(--line)); }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .play.hint { animation: none; box-shadow: 0 0 0 4px rgba(242, 177, 52, 0.35); }
+  .play.hint, .guide.describing .btn.guide-edit { animation: none; box-shadow: 0 0 0 4px rgba(242, 177, 52, 0.35); }
   .btn.solo.hint { animation: none; box-shadow: 0 0 8px color-mix(in srgb, var(--c) 45%, transparent); }
 }
