@@ -25,7 +25,7 @@ link can reproduce both. The song id comes first; the rest are `&`-separated
 - `g` — fader gains as `stem:value` pairs, 0 to 1.5 (1 is unity)
 - `t` — position in seconds; the player seeks there but waits for Play
 
-The player keeps the hash current as you mix and the Copy link button (or `L`)
+The player keeps the hash current as you mix and the Share button (or `L`)
 copies it with the current position.
 
 Run locally with any static server from the repo root, e.g.
