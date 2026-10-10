@@ -563,7 +563,7 @@ function seek(to) {
 }
 
 function sheetOpen() {
-  return !!((ui.mixSheet && ui.mixSheet.open) || (ui.songSheet && ui.songSheet.open));
+  return !!((ui.mixSheet && ui.mixSheet.open) || (ui.songSheet && ui.songSheet.open) || (ui.offerSheet && ui.offerSheet.open));
 }
 
 // Keys typed into a text field belong to the field, not the player.
@@ -1014,6 +1014,7 @@ function renderGuide() {
   ui.guideKicker.textContent = tipEditing ? 'Editing a tip' : editing ? 'Tips' : 'Guide';
   ui.guideTitle.hidden = editing;
   ui.guideAdd.hidden = !editing || tipEditing;
+  ui.guideOffer.hidden = tipEditing || !canOffer();
   ui.guideClose.hidden = tipEditing;
   ui.guideClose.title = editing ? 'Finish writing; the guide stays in the link' : 'Close this guide';
   ui.guideTitle.textContent = guide.title;
@@ -1067,10 +1068,11 @@ function renderGuideNow() {
     : 'Play the song, set mute/solo, and click <em>Tip: Start</em> where a passage worth a tip begins. '
       + 'When done adding tips and descriptions, click <em>Share</em> '
       + '<svg class="inline-icon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 10H6.5A1.5 1.5 0 0 0 5 11.5v8A1.5 1.5 0 0 0 6.5 21h11a1.5 1.5 0 0 0 1.5-1.5v-8a1.5 1.5 0 0 0-1.5-1.5H16"/><path d="M12 15V3M8 7l4-4 4 4"/></svg>'
-      + ' to send a link to your creation.';
+      + ' to send a link to your creation, or <em>Contribute</em> to offer it to the library.';
   if (guide.error) ui.guideStatus.textContent = guide.error;
+  else if (guide.notice) ui.guideStatus.textContent = guide.notice;
   else ui.guideStatus.innerHTML = hint; // our own copy, no user text
-  ui.guideStatus.hidden = !(guide.error || hint);
+  ui.guideStatus.hidden = !(guide.error || guide.notice || hint);
   ui.guideStatus.classList.toggle('error', !!guide.error);
   ui.guideContinue.hidden = !guideWaiting;
   Array.from(ui.guideTips.children).forEach((li, i) => li.classList.toggle('on', i === guideIndex));
@@ -1138,10 +1140,12 @@ function wireGuide() {
   ui.marks = document.getElementById('marks');
   ui.guideKicker = document.getElementById('guide-kicker');
   ui.guideAdd = document.getElementById('guide-add');
+  ui.guideOffer = document.getElementById('guide-offer');
   ui.guideClose = document.getElementById('guide-close');
   ui.mixer = document.getElementById('mixer');
   ui.guideContinue.addEventListener('click', () => { guideWaiting = false; play(); });
   ui.guideAdd.addEventListener('click', startTip);
+  ui.guideOffer.addEventListener('click', openOfferSheet);
   // While writing, the close button finishes writing and shows the guide as
   // readers will see it; the guide stays in the link. Closing that view
   // drops the guide.
@@ -1394,6 +1398,195 @@ function buildTipEditor(tip, i) {
   });
   li.querySelector('.loop').addEventListener('click', () => (loopRange ? pause() : startLoop(i, tipEdit.at, tipEdit.to, { ...tip, solo: tipEdit.solo, mute: tipEdit.mute })));
   return li;
+}
+
+// ---------- offering a guide to the library ----------
+//
+// A guide written in the player lives in its link. Contribute offers it to
+// the library, where it appears under the song for everyone: the sheet asks
+// for the title, author and language that writing left out, then opens
+// GitHub's new-file page with the guide prefilled at guides/<song>/<slug>.txt.
+// Committing there proposes the change as a pull request (GitHub forks the
+// repo for anyone without push access), and the deploy regenerates
+// guides.json from the files, so the one new file is the whole contribution.
+// There is no server here, so the GitHub account is the contributor's own;
+// Copy text covers anyone who would rather send the guide another way.
+
+const REPO_URL = 'https://github.com/weitzman/splitopen';
+const REPO_BRANCH = 'main';
+const AUTHOR_KEY = 'splitopen.author'; // the name and link, so they are typed once
+const OFFER_URL_MAX = 7000; // past this GitHub may refuse the link; the text goes by clipboard instead
+
+function guideSlug(title) {
+  const s = title.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60).replace(/-+$/, '');
+  return s || 'guide';
+}
+
+function guideInLibrary() {
+  return !!guide && !!song && (repoGuides[song.id] || []).includes(guide.param);
+}
+
+// Only a guide with something in it, that is not already in the library.
+function canOffer() {
+  return !!guide && !guide.error && guide.tips.length > 0 && !guideInLibrary() && !!window.CompressionStream;
+}
+
+function loadAuthor() {
+  try { return JSON.parse(localStorage.getItem(AUTHOR_KEY)) || {}; } catch (_) { return {}; }
+}
+
+function saveAuthor(by, url) {
+  try { localStorage.setItem(AUTHOR_KEY, JSON.stringify({ by, url })); } catch (_) { /* private mode */ }
+}
+
+// The link field shows https:// as a fixed prefix and takes the rest; a
+// pasted scheme is dropped so the prefix is not doubled.
+function offerUrlRest(v) {
+  return v.trim().replace(/^[a-z][a-z0-9+.-]*:\/\//i, '').replace(/^\/+/, '');
+}
+
+function offerUrl() {
+  const rest = offerUrlRest(ui.offerUrl.value);
+  return rest ? 'https://' + rest : '';
+}
+
+function offerUrlOk() {
+  const url = offerUrl();
+  if (!url) return true;
+  try { return new URL(url).hostname.includes('.'); } catch (_) { return false; }
+}
+
+// The form's values as guide headers, over the open guide's tips.
+function offerDraft() {
+  return {
+    ...guide,
+    title: ui.offerTitle.value.trim(),
+    by: ui.offerBy.value.trim(),
+    url: offerUrl(),
+    lang: ui.offerLang.value.trim().toLowerCase() || 'en',
+  };
+}
+
+function offerFileUrl(slug, text) {
+  const q = new URLSearchParams({
+    filename: slug + '.txt',
+    value: text,
+    message: `Add guide: ${ui.offerTitle.value.trim()} (${song.title})`,
+  });
+  // %20 rather than + for spaces, which GitHub's editor is known to take.
+  return `${REPO_URL}/new/${REPO_BRANCH}/guides/${encodeURIComponent(song.id)}?${String(q).replace(/\+/g, '%20')}`;
+}
+
+function setOfferStatus(text, kind = '') {
+  ui.offerStatus.textContent = text;
+  ui.offerStatus.className = 'offer-status' + (kind ? ' ' + kind : '');
+  ui.offerStatus.hidden = !text;
+}
+
+async function openOfferSheet() {
+  if (!canOffer()) return;
+  if (guide.editing) await finishEditing();
+  const saved = loadAuthor();
+  ui.offerTitle.value = guide.title;
+  ui.offerBy.value = guide.by || saved.by || '';
+  ui.offerUrl.value = offerUrlRest(guide.url || saved.url || '');
+  ui.offerLang.value = guide.lang || 'en';
+  setOfferStatus('');
+  renderOfferPreview();
+  ui.offerSheet.showModal();
+  ui.offerTitle.focus();
+}
+
+function renderOfferPreview() {
+  if (!guide) return;
+  ui.offerText.textContent = guideText(offerDraft());
+}
+
+// Open pull request: the guide takes the headers, its link is rewritten
+// with them, and GitHub opens in a new tab with the file ready to commit.
+// The tab has to open inside the click, before any await, or the browser
+// counts it as a popup; the hash is brought up to date afterwards.
+function submitOffer(e) {
+  e.preventDefault();
+  if (!canOffer()) return ui.offerSheet.close();
+  const draft = offerDraft();
+  if (!draft.title) {
+    setOfferStatus('Give the guide a title.', 'error');
+    return ui.offerTitle.focus();
+  }
+  if (!ui.offerLang.checkValidity()) {
+    setOfferStatus('The language is a code like en or fr.', 'error');
+    return ui.offerLang.focus();
+  }
+  if (!offerUrlOk()) {
+    setOfferStatus('The link needs a site, like example.com/you.', 'error');
+    return ui.offerUrl.focus();
+  }
+  const slug = guideSlug(draft.title);
+  if ((repoGuides[song.id] || []).includes(slug)) {
+    setOfferStatus(`The library already has a guide at “${slug}” for this song; give yours another title.`, 'error');
+    return ui.offerTitle.focus();
+  }
+  const text = guideText(draft);
+  let url = offerFileUrl(slug, text);
+  let notice = 'Finish the pull request on GitHub. The guide stays in this link meanwhile.';
+  if (url.length > OFFER_URL_MAX) {
+    // Too long for a link: GitHub gets the file name and the text travels
+    // by clipboard, which still honors this click.
+    copyText(text);
+    url = offerFileUrl(slug, '');
+    notice = 'The guide is too long for a link, so its text is copied: paste it into the file on GitHub, then finish the pull request.';
+  }
+  const win = window.open(url, '_blank', 'noopener');
+  if (!win) {
+    setOfferStatus('The browser blocked the GitHub tab. ', 'error');
+    const a = document.createElement('a');
+    a.href = url;
+    a.target = '_blank';
+    a.rel = 'noopener';
+    a.textContent = 'Open it here.';
+    ui.offerStatus.appendChild(a);
+  } else {
+    ui.offerSheet.close();
+  }
+  saveAuthor(draft.by, draft.url);
+  Object.assign(guide, { title: draft.title, by: draft.by, url: draft.url, lang: draft.lang, notice });
+  renderGuide();
+  guideSync(false);
+  encodeGuide(text).then(param => {
+    if (!guide || guide.editing) return;
+    guide.param = guideParam = param;
+    writeHash();
+    renderGuideChips();
+  });
+}
+
+function copyText(text) {
+  let ok = false;
+  try { navigator.clipboard.writeText(text).catch(() => {}); ok = true; } catch (_) { ok = copyViaSelection(text); }
+  return ok;
+}
+
+function wireOfferSheet() {
+  ui.offerSheet = document.getElementById('offer-sheet');
+  ui.offerTitle = document.getElementById('offer-title');
+  ui.offerBy = document.getElementById('offer-by');
+  ui.offerUrl = document.getElementById('offer-url');
+  ui.offerLang = document.getElementById('offer-lang');
+  ui.offerText = document.getElementById('offer-text');
+  ui.offerStatus = document.getElementById('offer-status');
+  document.getElementById('offer-form').addEventListener('submit', submitOffer);
+  document.getElementById('offer-cancel').addEventListener('click', () => ui.offerSheet.close());
+  for (const el of [ui.offerTitle, ui.offerBy, ui.offerUrl, ui.offerLang]) {
+    el.addEventListener('input', () => { setOfferStatus(''); renderOfferPreview(); });
+  }
+  ui.offerUrl.addEventListener('change', () => { ui.offerUrl.value = offerUrlRest(ui.offerUrl.value); renderOfferPreview(); });
+  document.getElementById('offer-copy').addEventListener('click', () => {
+    if (!guide) return;
+    setOfferStatus(copyText(guideText(offerDraft())) ? 'Copied the guide text.' : 'Copying failed; select the text below instead.', '');
+    ui.offerText.closest('details').open = true;
+  });
 }
 
 // The mix sheet: a modal with one row per player, Mute and Solo as on the
@@ -1877,6 +2070,7 @@ async function loadSong(state) {
   wireTransport();
   wireGuide();
   wireMixSheet();
+  wireOfferSheet();
   mediaSessionInstall();
   tick();
   try {
