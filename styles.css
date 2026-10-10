@@ -359,7 +359,10 @@ a.guide-by { text-decoration: underline; text-underline-offset: 3px; }
 a.guide-by:hover { color: var(--gold); }
 /* Edit / Save keeps one spot, beside the close button, in every mode. */
 .btn.guide-edit { margin-left: auto; }
-.btn.guide-edit[hidden] + .btn.guide-close { margin-left: auto; }
+.btn.guide-edit[hidden] + .btn.guide-offer { margin-left: auto; }
+.btn.guide-edit[hidden] + .btn.guide-offer[hidden] + .btn.guide-close { margin-left: auto; }
+.btn.guide-offer { border-color: var(--gold); color: var(--gold); }
+.btn.guide-offer:hover { background: var(--gold); color: #1a1200; }
 .btn.guide-close {
   min-width: 34px;
   padding: 0;
@@ -563,6 +566,50 @@ li.looping .icon.loop { background: var(--gold); border-color: var(--gold); colo
 .sheet-actions { display: flex; align-items: center; gap: 8px; margin-top: 14px; }
 .sheet-actions .spacer { flex: 1; }
 .sheet-actions .btn.use { background: var(--gold); border-color: var(--gold); color: #1a1200; }
+/* Contributing a guide: the headers writing left out, a preview of the
+   text, and the way to GitHub. */
+.offer-sheet { width: min(520px, calc(100vw - 32px)); max-height: min(90vh, 760px); overflow-y: auto; }
+.offer-intro { margin: 0 0 14px; color: var(--muted); font-size: 14px; line-height: 1.45; }
+.offer-field { display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px; min-width: 0; }
+.offer-label { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.12em; }
+.offer-opt { text-transform: none; letter-spacing: 0; color: var(--muted); opacity: 0.8; }
+.offer-row { display: flex; gap: 12px; }
+.offer-row .offer-field { flex: 1; }
+.offer-row .offer-lang { flex: 0 0 96px; }
+.offer-field input {
+  width: 100%;
+  min-width: 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: rgba(0,0,0,0.25);
+  color: var(--text);
+  font: 16px Inter, sans-serif; /* 16px: below that, iOS Safari zooms the page when the field is focused */
+}
+.offer-field input:focus { outline: 1px solid var(--gold); }
+/* The link field: https:// as plain text to the left of the box. */
+.offer-url { display: flex; align-items: center; gap: 6px; }
+.offer-prefix { color: var(--muted); font: 16px Inter, sans-serif; user-select: none; }
+.offer-url input { flex: 1; }
+.offer-preview { margin: 2px 0 10px; font-size: 14px; }
+.offer-preview summary { cursor: pointer; color: var(--muted); }
+.offer-preview summary:hover { color: var(--text); }
+.offer-preview pre {
+  margin: 8px 0 0;
+  max-height: 180px;
+  overflow: auto;
+  padding: 10px;
+  border-radius: 8px;
+  background: rgba(0,0,0,0.3);
+  font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.offer-status { margin: 0; font-size: 14px; color: var(--muted); }
+.offer-status.error { color: var(--donut); }
+.offer-status a { color: var(--gold); }
+.offer-status[hidden] { display: none; }
+
 @media (max-width: 720px) {
   .sheet {
     position: fixed;
