@@ -70,6 +70,7 @@
       <span class="guide-kicker" id="guide-kicker">Guide</span>
       <span class="guide-title" id="guide-title"></span>
       <button class="btn guide-add" id="guide-add" title="Start a tip here, with the current mix (N)" hidden>Tip: Start</button>
+      <button class="btn guide-offer" id="guide-offer" title="Offer this guide to the library, as a pull request on GitHub" hidden>Contribute</button>
       <button class="btn guide-close" id="guide-close" aria-label="Close guide">&times;</button>
     </div>
     <p class="guide-status" id="guide-status" hidden></p>
@@ -122,6 +123,43 @@
     <button class="btn" id="mix-sheet-cancel" type="button">Cancel</button>
     <button class="btn use" id="mix-sheet-use" type="button">Use this mix</button>
   </div>
+</dialog>
+
+<dialog class="sheet offer-sheet" id="offer-sheet" aria-labelledby="offer-sheet-title">
+  <form id="offer-form" method="dialog" novalidate>
+    <h2 class="sheet-title" id="offer-sheet-title">Contribute this guide</h2>
+    <p class="offer-intro">Guides in the library appear under the song for everyone. Name yours, then open it as a pull request on GitHub; the author's name and link are shown with the guide.</p>
+    <label class="offer-field">
+      <span class="offer-label">Guide title</span>
+      <input id="offer-title" type="text" required maxlength="80" autocomplete="off" placeholder="e.g. Solos, or Mike's entrance">
+    </label>
+    <div class="offer-row">
+      <label class="offer-field">
+        <span class="offer-label">Your name</span>
+        <input id="offer-by" type="text" maxlength="80" autocomplete="name" placeholder="Shown after the title">
+      </label>
+      <label class="offer-field offer-lang">
+        <span class="offer-label">Language</span>
+        <input id="offer-lang" type="text" maxlength="8" autocomplete="off" pattern="[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})?" placeholder="en" title="The notes' language code, like en or fr">
+      </label>
+    </div>
+    <label class="offer-field">
+      <span class="offer-label">A link for your name <span class="offer-opt">optional</span></span>
+      <span class="offer-url"><span class="offer-prefix" aria-hidden="true">https://</span><input id="offer-url" type="text" maxlength="200" autocomplete="url" spellcheck="false" placeholder="example.com/you" aria-describedby="offer-url-hint"></span>
+      <span id="offer-url-hint" hidden>Entered after https://</span>
+    </label>
+    <details class="offer-preview">
+      <summary>The guide as it will be submitted</summary>
+      <pre id="offer-text"></pre>
+    </details>
+    <p class="offer-status" id="offer-status" hidden></p>
+    <div class="sheet-actions">
+      <button class="more" id="offer-copy" type="button" title="Copy the guide text, to send another way">Copy text</button>
+      <span class="spacer"></span>
+      <button class="btn" id="offer-cancel" type="button">Cancel</button>
+      <button class="btn use" id="offer-go" type="submit">Open pull request</button>
+    </div>
+  </form>
 </dialog>
 
 <script src="app.js"></script>
