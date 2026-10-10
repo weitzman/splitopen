@@ -1,0 +1,21 @@
+# Checks songs.json, bands.json and every guide under guides/ the way the
+# player reads them, so a pull request with a broken entry shows a failed
+# check before it is merged. deploy.yml and preview.yml run the same
+# scripts and fail the same way.
+name: Check data
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check the songs and bands
+        run: python3 scripts/check-songs.py
+
+      - name: Parse the guides
+        run: python3 scripts/guides-index.py --lint
