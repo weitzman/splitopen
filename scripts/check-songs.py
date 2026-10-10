@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Checks songs.json and bands.json against what the player expects.
+"""Checks songs.yaml and bands.yaml against what the player expects.
 
-The player (see loadSong in app.js) reads a song's band from bands.json,
+The player (see loadSong in app.js) reads a song's band from bands.yaml,
 its five stems from `dir`, and optional per-stem overrides from `channels`.
 This script is strict: a missing or mistyped field, an unknown field, a
-band the song names that is not in bands.json, a stem file that is not
+band the song names that is not in bands.yaml, a stem file that is not
 there, or a date that is not a date all fail the run with the song named,
 so a pull request with a broken entry fails its check and a bad merge
 fails the deploy.
@@ -12,10 +12,12 @@ fails the deploy.
     python3 scripts/check-songs.py
 """
 import datetime
-import json
 import os
 import re
 import sys
+
+import yaml
+import yaml12
 
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
 SLUG = re.compile(r'^[\w-]+$')
@@ -31,11 +33,11 @@ def load(name, errors):
     path = os.path.join(ROOT, name)
     try:
         with open(path, encoding='utf-8') as f:
-            return json.load(f)
+            return yaml12.load(f.read())
     except OSError as e:
         errors.append(f'{name}: {e.strerror}')
-    except ValueError as e:
-        errors.append(f'{name}: not valid JSON ({e})')
+    except yaml.YAMLError as e:
+        errors.append(f'{name}: not valid YAML ({" ".join(str(e).split())})')
     return None
 
 
@@ -56,7 +58,7 @@ def check_channels(channels, where, errors, complete):
     """A map of stem id to {who, inst}. A band's lists every stem with
     both; a song's lists only what it overrides."""
     if not isinstance(channels, dict):
-        errors.append(f'{where}: "channels" must be an object keyed by stem')
+        errors.append(f'{where}: "channels" must be a map keyed by stem')
         return
     for stem, ch in channels.items():
         here = f'{where} channels.{stem}'
@@ -64,7 +66,7 @@ def check_channels(channels, where, errors, complete):
             errors.append(f'{here}: unknown stem (one of {", ".join(STEMS)})')
             continue
         if not isinstance(ch, dict):
-            errors.append(f'{here}: must be an object with "who" and/or "inst"')
+            errors.append(f'{here}: must be a map with "who" and/or "inst"')
             continue
         for key in ch:
             if key not in ('who', 'inst'):
@@ -79,14 +81,14 @@ def check_channels(channels, where, errors, complete):
 
 def check_bands(bands, errors):
     if not isinstance(bands, dict):
-        errors.append('bands.json: must be an object keyed by band slug')
+        errors.append('bands.yaml: must be a map keyed by band slug')
         return set()
     for slug, band in bands.items():
-        where = f'bands.json {slug}'
+        where = f'bands.yaml {slug}'
         if not SLUG.match(slug):
             errors.append(f'{where}: the slug may only have letters, digits, - and _')
         if not isinstance(band, dict):
-            errors.append(f'{where}: must be an object with "name" and "channels"')
+            errors.append(f'{where}: must be a map with "name" and "channels"')
             continue
         for key in band:
             if key not in ('name', 'channels'):
@@ -101,17 +103,17 @@ def check_bands(bands, errors):
 
 def check_songs(songs, band_ids, errors):
     if not isinstance(songs, list):
-        errors.append('songs.json: must be an array of songs')
+        errors.append('songs.yaml: must be a list of songs')
         return
     seen = set()
     for i, song in enumerate(songs):
-        where = f'songs.json [{i}]'
+        where = f'songs.yaml [{i}]'
         if not isinstance(song, dict):
-            errors.append(f'{where}: must be an object')
+            errors.append(f'{where}: must be a map')
             continue
         sid = text(song, 'id', where, errors)
         if sid:
-            where = f'songs.json {sid}'
+            where = f'songs.yaml {sid}'
             if not SLUG.match(sid):
                 errors.append(f'{where}: the id may only have letters, digits, - and _')
             if sid in seen:
@@ -126,7 +128,7 @@ def check_songs(songs, band_ids, errors):
         text(song, 'set', where, errors, required=False)
         band = text(song, 'band', where, errors)
         if band and band not in band_ids:
-            errors.append(f'{where}: band "{band}" is not in bands.json')
+            errors.append(f'{where}: band "{band}" is not in bands.yaml')
         date = text(song, 'date', where, errors)
         if date:
             try:
@@ -153,13 +155,13 @@ def check_songs(songs, band_ids, errors):
         if 'channels' in song:
             check_channels(song['channels'], where, errors, complete=False)
     if not any(isinstance(s, dict) and not s.get('hidden') for s in songs):
-        errors.append('songs.json: every song is hidden; the picker would be empty')
+        errors.append('songs.yaml: every song is hidden; the picker would be empty')
 
 
 if __name__ == '__main__':
     errors = []
-    bands = load('bands.json', errors)
-    songs = load('songs.json', errors)
+    bands = load('bands.yaml', errors)
+    songs = load('songs.yaml', errors)
     band_ids = check_bands(bands, errors) if bands is not None else set()
     if songs is not None:
         check_songs(songs, band_ids, errors)

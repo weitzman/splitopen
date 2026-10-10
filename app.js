@@ -7,7 +7,7 @@
 // memory-bounded cache, and the other songs are fetched (and, budget
 // permitting, decoded) in the background once the current one is ready.
 
-// Fixed stem slots; who plays each one comes from bands.json per song.
+// Fixed stem slots; who plays each one comes from bands.yaml per song.
 const SLOTS = [
   { id: 'guitar', file: 'guitar.opus', color: 'var(--trey)' },
   { id: 'bass',   file: 'bass.opus',   color: 'var(--mike)' },
@@ -316,7 +316,7 @@ function applyMuteSolo() {
 const GAIN_MAX = 1.5;
 let hashPos = null; // position (s) last written to the hash; null means none
 
-// A song marked "hidden" in songs.json stays out of the picker, the count,
+// A song marked "hidden" in songs.yaml stays out of the picker, the count,
 // the next/previous controls and background warming, but still plays from
 // a direct link.
 function listedSongs() {
@@ -332,15 +332,19 @@ function parseStemList(val) {
   return val.split(',').filter(id => slotIds.includes(id));
 }
 
-function parseGains(val) {
+// Gains from [stem, value] pairs: known stems only, clamped to the fader's range.
+function gainsFrom(pairs) {
   const slotIds = SLOTS.map(slot => slot.id);
   const gains = {};
-  for (const item of val.split(',')) {
-    const [id, v] = item.split(':');
+  for (const [id, v] of pairs) {
     const n = Number(v);
     if (slotIds.includes(id) && Number.isFinite(n)) gains[id] = Math.max(0, Math.min(GAIN_MAX, n));
   }
   return gains;
+}
+
+function parseGains(val) {
+  return gainsFrom(val.split(',').map(item => item.split(':')));
 }
 
 function parseHash() {
@@ -678,25 +682,33 @@ function mediaSessionPosition() {
 // passage, a mix, and a note. The mix holds for the passage; between tips
 // the band plays in full. When the playhead crosses into a tip its note is
 // shown; a tip marked `pause` also stops the music until the listener
-// presses Continue. The text form is the format:
+// presses Continue. The text form is YAML:
 //
-//   lang: en
 //   title: Solos
+//   lang: en
 //   by: Moshe Weitzman
 //   url: https://weitzman.github.io
-//   0:00 to=0:30 solo=drums | Fish alone on drums.
-//   0:30 to=1:00 solo=drums,bass pause | Mike joins. Listen for the push and pull.
+//   tips:
+//     - at: 0:00
+//       to: 0:30
+//       solo: [drums]
+//       note: Fish alone on drums.
+//     - at: 0:30
+//       to: 1:00
+//       solo: [drums, bass]
+//       pause: true
+//       note: Mike joins. Listen for the push and pull.
 //
-// Header lines are `key: value` (title, lang, by, url; lang is the notes'
-// language code, which the page passes on to the browser; by and url name
-// and link the author). Tip lines start with
-// m:ss, then any of to=m:ss (where the tip ends; without it, at the next
-// tip), solo=, mute=, g= (as in the hash) and pause, then `|` and the note.
-// A later tip may start earlier than the one before it ends, which is how a
-// passage is replayed. The hash carries a guide as guide=<slug> for one
-// kept in the repo (see guides.json), or guide=z<base64url of the deflated
-// text> for one written in the player or by hand; SplitOpen.guideLink(text)
-// in the console makes such a link.
+// The top-level keys are title, lang (the notes' language code, which the
+// page passes on to the browser), by and url (the author's name and a link
+// for it) and tips. A tip has at (m:ss), then any of to (where the tip
+// ends; without it, at the next tip), solo and mute (a player or a list of
+// players), gain (a map of player to level, 0 to 1.5), pause (true) and
+// note. A later tip may start earlier than the one before it ends, which is
+// how a passage is replayed. The hash carries a guide as guide=<slug> for
+// one kept in the repo (see guides.json), or guide=z<base64url of the
+// deflated text> for one written in the player or by hand;
+// SplitOpen.guideLink(text) in the console makes such a link.
 
 function emptyTip(at) {
   return { at, to: null, solo: [], mute: [], gains: {}, pause: false, note: '' };
@@ -707,28 +719,40 @@ function parseClock(s) {
   return m ? Number(m[1]) * 60 + Number(m[2]) : null;
 }
 
+// YAML as js-yaml (vendor/js-yaml.min.js) reads it with the core schema,
+// which is YAML 1.2: 0:30 and 1998-07-26 stay strings, so times and dates
+// arrive as written. scripts/yaml12.py gives the checks the same reading.
+function yamlLoad(text) {
+  return jsyaml.load(text, { schema: jsyaml.CORE_SCHEMA });
+}
+
+async function fetchYaml(url) {
+  const r = await fetch(url, { cache: 'no-cache' });
+  if (!r.ok) throw new Error(`${url}: ${r.status}`);
+  return yamlLoad(await r.text());
+}
+
+// Reads a guide from its YAML text. Lenient, as the player is with the
+// hash: a tip without a readable start is dropped, unknown players and keys
+// are ignored. scripts/guides-index.py checks the library's guides strictly.
+// Throws on text that is not YAML.
 function parseGuideText(text) {
-  const g = { title: '', lang: '', by: '', url: '', tips: [] };
-  for (let line of text.split('\n')) {
-    line = line.trim();
-    if (!line || line.startsWith('#')) continue;
-    const m = /^(\d+:\d{2}(?:\.\d+)?)\s*([^|]*)(?:\|\s*(.*))?$/.exec(line);
-    if (!m) {
-      const h = /^(title|lang|by|url):\s*(.*)$/i.exec(line);
-      if (h) g[h[1].toLowerCase()] = h[2].trim();
-      continue;
-    }
-    const tip = emptyTip(parseClock(m[1]));
-    tip.note = (m[3] || '').trim();
-    for (const tok of m[2].trim().split(/\s+/).filter(Boolean)) {
-      const eq = tok.indexOf('=');
-      const key = eq < 0 ? tok : tok.slice(0, eq);
-      const val = eq < 0 ? '' : tok.slice(eq + 1);
-      if (key === 'solo' || key === 'mute') tip[key] = parseStemList(val);
-      else if (key === 'g') tip.gains = parseGains(val);
-      else if (key === 'to') tip.to = parseClock(val);
-      else if (key === 'pause') tip.pause = true;
-    }
+  const doc = yamlLoad(text);
+  const d = doc && typeof doc === 'object' && !Array.isArray(doc) ? doc : {};
+  const str = v => (v === null || v === undefined ? '' : String(v).trim());
+  const names = v => (Array.isArray(v) ? v : [v]).map(str).join(',');
+  const g = { title: str(d.title), lang: str(d.lang), by: str(d.by), url: str(d.url), tips: [] };
+  for (const t of Array.isArray(d.tips) ? d.tips : []) {
+    if (!t || typeof t !== 'object') continue;
+    const at = parseClock(str(t.at));
+    if (at === null) continue;
+    const tip = emptyTip(at);
+    tip.to = parseClock(str(t.to));
+    if ('solo' in t) tip.solo = parseStemList(names(t.solo));
+    if ('mute' in t) tip.mute = parseStemList(names(t.mute));
+    if (t.gain && typeof t.gain === 'object') tip.gains = gainsFrom(Object.entries(t.gain));
+    tip.pause = t.pause === true;
+    tip.note = str(t.note);
     g.tips.push(tip);
   }
   return g;
@@ -771,7 +795,7 @@ window.SplitOpen = {
 };
 
 // The library: guides.json maps a song id to the slugs of the guides kept
-// under guides/<song id>/<slug>.txt. Their headers are read when the song
+// under guides/<song id>/<slug>.yaml. Their headers are read when the song
 // loads so the chips can show title and author.
 let repoGuides = {};        // song id -> [slug]
 let repoGuideMeta = {};     // slug -> { title, by } for the current song
@@ -782,7 +806,7 @@ let guideIndex = -1;    // the tip the playhead is in; -1 before the first
 let guideWaiting = false; // paused by a `pause` tip, waiting for Continue
 
 function repoGuideUrl(slug) {
-  return `guides/${song.id}/${slug}.txt`;
+  return `guides/${song.id}/${slug}.yaml`;
 }
 
 async function fetchRepoGuide(slug) {
@@ -1176,24 +1200,26 @@ function clock(s) {
   return fmt(Math.floor(tenths / 10)) + (frac ? '.' + frac : '');
 }
 
-// The text form of a guide, the inverse of parseGuideText.
+// The YAML text of a guide, the inverse of parseGuideText: the headers that
+// are set, then one map per tip with only what the tip sets.
 function guideText(g) {
-  const lines = [];
-  if (g.title) lines.push('title: ' + g.title);
-  if (g.lang) lines.push('lang: ' + g.lang);
-  if (g.by) lines.push('by: ' + g.by);
-  if (g.url) lines.push('url: ' + g.url);
-  for (const s of g.tips) {
-    const keys = [];
-    if (s.solo.length) keys.push('solo=' + s.solo.join(','));
-    if (s.mute.length) keys.push('mute=' + s.mute.join(','));
-    const gains = Object.entries(s.gains).filter(([, v]) => v !== 1).map(([id, v]) => id + ':' + v);
-    if (gains.length) keys.push('g=' + gains.join(','));
-    if (s.to !== null) keys.push('to=' + clock(s.to));
-    if (s.pause) keys.push('pause');
-    lines.push([clock(s.at), ...keys].join(' ') + ' | ' + s.note.replace(/\s*\n\s*/g, ' ').trim());
-  }
-  return lines.join('\n') + '\n';
+  const doc = {};
+  for (const key of ['title', 'lang', 'by', 'url']) if (g[key]) doc[key] = g[key];
+  doc.tips = g.tips.map(s => {
+    const t = { at: clock(s.at) };
+    if (s.to !== null) t.to = clock(s.to);
+    if (s.solo.length) t.solo = [...s.solo];
+    if (s.mute.length) t.mute = [...s.mute];
+    const gains = Object.entries(s.gains).filter(([, v]) => v !== 1);
+    if (gains.length) t.gain = Object.fromEntries(gains);
+    if (s.pause) t.pause = true;
+    const note = s.note.replace(/\s*\n\s*/g, ' ').trim();
+    if (note) t.note = note;
+    return t;
+  });
+  // Player lists and gain maps inline ([drums, bass]); a note on one line
+  // however long; no quoting of yes/no, which are only words in YAML 1.2.
+  return jsyaml.dump(doc, { schema: jsyaml.CORE_SCHEMA, flowLevel: 3, lineWidth: -1, noCompatMode: true });
 }
 
 // The draft is always in the link, so leaving it only needs a word when
@@ -1405,7 +1431,7 @@ function buildTipEditor(tip, i) {
 // A guide written in the player lives in its link. Contribute offers it to
 // the library, where it appears under the song for everyone: the sheet asks
 // for the title, author and language that writing left out, then opens
-// GitHub's new-file page with the guide prefilled at guides/<song>/<slug>.txt.
+// GitHub's new-file page with the guide prefilled at guides/<song>/<slug>.yaml.
 // Committing there proposes the change as a pull request (GitHub forks the
 // repo for anyone without push access), and the deploy regenerates
 // guides.json from the files, so the one new file is the whole contribution.
@@ -1470,7 +1496,7 @@ function offerDraft() {
 
 function offerFileUrl(slug, text) {
   const q = new URLSearchParams({
-    filename: slug + '.txt',
+    filename: slug + '.yaml',
     value: text,
     message: `Add guide: ${ui.offerTitle.value.trim()} (${song.title})`,
   });
@@ -2075,8 +2101,8 @@ async function loadSong(state) {
   tick();
   try {
     [songs, bands, repoGuides] = await Promise.all([
-      fetch('songs.json', { cache: 'no-cache' }).then(r => r.json()),
-      fetch('bands.json', { cache: 'no-cache' }).then(r => r.json()),
+      fetchYaml('songs.yaml'),
+      fetchYaml('bands.yaml'),
       fetch('guides.json', { cache: 'no-cache' }).then(r => (r.ok ? r.json() : {})).catch(() => ({})),
     ]);
   } catch (err) {
