@@ -220,10 +220,11 @@ async function warmOtherSongs(current) {
   const token = ++warmToken;
   if (LOW_MEMORY) return;
   if (navigator.connection && navigator.connection.saveData) return;
-  const i = songs.findIndex(s => s.id === current.id);
+  const listed = listedSongs();
+  const i = listed.findIndex(s => s.id === current.id);
   const order = [];
-  for (let d = 1; d < songs.length; d++) {
-    order.push(songs[(i + d) % songs.length]);
+  for (let d = 1; d < listed.length; d++) {
+    order.push(listed[(i + d) % listed.length]);
   }
   for (const s of order) {
     if (token !== warmToken) return;
@@ -315,8 +316,15 @@ function applyMuteSolo() {
 const GAIN_MAX = 1.5;
 let hashPos = null; // position (s) last written to the hash; null means none
 
+// A song marked "hidden" in songs.json stays out of the picker, the count,
+// the next/previous controls and background warming, but still plays from
+// a direct link.
+function listedSongs() {
+  return songs.filter(s => !s.hidden);
+}
+
 function findSong(id) {
-  return songs.find(s => s.id === id) || songs[0];
+  return songs.find(s => s.id === id) || listedSongs()[0] || songs[0];
 }
 
 function parseStemList(val) {
@@ -626,9 +634,10 @@ function mediaSessionWatchKeepalive(el) {
 
 // Wraps around the song list, the same way the sidebar switches songs.
 function mediaSessionStep(dir) {
-  if (!song || !songs.length) return;
-  const i = songs.findIndex(s => s.id === song.id);
-  location.hash = songs[(i + dir + songs.length) % songs.length].id;
+  const listed = listedSongs();
+  if (!song || !listed.length) return;
+  const i = listed.findIndex(s => s.id === song.id);
+  location.hash = listed[(i + dir + listed.length) % listed.length].id;
 }
 
 function mediaSessionMetadata() {
@@ -1085,9 +1094,9 @@ function renderGuideNow() {
   }
 }
 
-// The chips under the song list, in the song chips' style with the author
-// where the band would be: the song's library guides, plus the open guide
-// when it arrived in the link.
+// The pills under the song title: the song's library guides, plus the open
+// guide when it arrived in the link. Titles only; the author is shown in
+// the panel.
 function renderGuideChips() {
   const row = document.getElementById('guides');
   row.innerHTML = '';
@@ -1106,11 +1115,7 @@ function renderGuideChips() {
     const btn = document.createElement('button');
     btn.className = 'song chip';
     btn.textContent = title || 'Untitled guide';
-    if (by) {
-      const small = document.createElement('small');
-      small.textContent = by;
-      btn.appendChild(small);
-    }
+    if (by) btn.title = 'by ' + by; // the author shows in the panel, not the pill
     btn.classList.toggle('on', !!guide && guide.param === param);
     btn.addEventListener('click', () => {
       if (!channels.length || !leaveDraftOk()) return;
@@ -1755,7 +1760,7 @@ function renderSongList(filter = '') {
   list.innerHTML = '';
   const q = filter.trim().toLowerCase();
   const byBand = new Map();
-  for (const s of songs) {
+  for (const s of listedSongs()) {
     const who = (bands[s.band] || {}).name || s.band;
     const hay = `${s.title} ${who} ${s.venue} ${s.city} ${s.date}`.toLowerCase();
     if (q && !hay.includes(q)) continue;
@@ -1833,7 +1838,8 @@ function wireSongPicker() {
   });
   // The pill on the title says how many songs there are to choose from.
   const pill = document.getElementById('pick-pill');
-  document.getElementById('pick-count').textContent = songs.length + (songs.length === 1 ? ' song' : ' songs');
+  const n = listedSongs().length;
+  document.getElementById('pick-count').textContent = n + (n === 1 ? ' song' : ' songs');
   pill.hidden = false;
 }
 

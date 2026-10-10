@@ -13,7 +13,9 @@ channel with mute, solo, and a fader, playing in sync.
   override any of those for the night, since lineups change: a `channels`
   map on the song with the stems to change, e.g.
   `"channels": { "keys": { "who": "Page & Medeski" }, "guitar": { "inst": "Guitars" } }`.
-  Its `source` is the archive.org item page the recording came from.
+  Its `source` is the archive.org item page the recording came from. A
+  song with `"hidden": true` stays out of the picker but still plays from a
+  direct link.
 - `scripts/add-song.sh` — download a FLAC from archive.org, separate it with
   BS-Roformer-SW (`audio-separator`), encode the stems, register the song in
   `songs.json`
@@ -65,8 +67,8 @@ Guides are written as plain text:
     1:05 to=1:20 solo=keys | The same passage, Page alone.
 
 - Header lines are `key: value`: `title`, `lang` (the notes' language code,
-  e.g. `en` or `fr`), `by` (the author's name, shown in the guide's chip and
-  after its title) and `url` (a link for the author's name).
+  e.g. `en` or `fr`), `by` (the author's name, shown after the guide's
+  title) and `url` (a link for the author's name).
 - A tip line starts with `m:ss`, then any of `to=m:ss` (where the tip ends;
   without it, at the next tip), `solo=`, `mute=`, `g=` (as in the hash) and
   `pause`, then `|` and the note. A later tip may start before the one
