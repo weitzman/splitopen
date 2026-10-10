@@ -8,6 +8,12 @@ channel with mute, solo, and a fader, playing in sync.
 - `index.html`, `app.js`, `styles.css`, `songs.json`, `bands.json` — the player
   (static HTML + Web Audio API, no build step), served from the repo root
 - `audio/songs/<id>/` — five Opus stems per song (128 kbps, Ogg container): guitar, bass, keys, drums, vocals
+- A song in `songs.json` names its band, whose lineup comes from `bands.json`
+  (`who` and `inst` per stem: guitar, bass, keys, drums, vocals). A song can
+  override any of those for the night, since lineups change: a `channels`
+  map on the song with the stems to change, e.g.
+  `"channels": { "keys": { "who": "Page & Medeski" }, "guitar": { "inst": "Guitars" } }`.
+  Its `source` is the archive.org item page the recording came from.
 - `scripts/add-song.sh` — download a FLAC from archive.org, separate it with
   BS-Roformer-SW (`audio-separator`), encode the stems, register the song in
   `songs.json`
@@ -32,9 +38,7 @@ copies it with the current position.
 
 A guide is a listening tour of a song: an ordered list of tips, each a
 passage, a mix, and a note. The mix holds for the passage and the band plays
-in full between tips; when the playhead reaches a tip its note is shown. The
-Spotlight guide under the song list is built in: each player alone in turn,
-then everyone together.
+in full between tips; when the playhead reaches a tip its note is shown.
 
 To write one, press **+ New guide** under the song title (or **Copy & edit**
 on an open guide to start from a copy of it), play the song, set mute/solo, and press `N` (or
@@ -69,9 +73,13 @@ Guides are written as plain text:
   before it ends, which is how a passage is replayed.
 - `pause` stops the music at the tip until the listener presses Continue.
 
-A guide travels in the link: `#songid&guide=spotlight` for a built-in one, or
-`guide=z…`, the deflated text, for one written by hand. To make such a link,
-open the song, then in the browser console:
+Guides kept in the repo live at `guides/<song id>/<slug>.txt` in the text
+form below, listed by slug under the song id in `guides.json`; they appear as
+pills under the song and open with `guide=<slug>`.
+
+A guide travels in the link: `#songid&guide=<slug>` for one in the repo, or
+`guide=z…`, the deflated text, for one written in the player or by hand. To
+make such a link by hand, open the song, then in the browser console:
 
     await SplitOpen.guideLink(`title: ...
     0:00 solo=drums | ...`)
