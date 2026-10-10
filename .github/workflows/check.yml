@@ -1,4 +1,4 @@
-# Checks songs.json, bands.json and every guide under guides/ the way the
+# Checks songs.yaml, bands.yaml and every guide under guides/ the way the
 # player reads them, so a pull request with a broken entry shows a failed
 # check before it is merged. deploy.yml and preview.yml run the same
 # scripts and fail the same way.
@@ -13,6 +13,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: Install PyYAML, which the scripts read the data files with
+        run: python3 -c 'import yaml' 2>/dev/null || python3 -m pip install pyyaml
 
       - name: Check the songs and bands
         run: python3 scripts/check-songs.py
