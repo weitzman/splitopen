@@ -1014,10 +1014,6 @@ function renderGuide() {
   ui.guideKicker.textContent = tipEditing ? 'Editing a tip' : editing ? 'Tips' : 'Guide';
   ui.guideTitle.hidden = editing;
   ui.guideAdd.hidden = !editing || tipEditing;
-  ui.guideEdit.textContent = 'Copy & edit';
-  // The tip list is always saved, so there is nothing to save; the button
-  // only offers to copy a guide being read.
-  ui.guideEdit.hidden = editing || !!guide.error || !window.CompressionStream;
   ui.guideOffer.hidden = tipEditing || !canOffer();
   ui.guideClose.hidden = tipEditing;
   ui.guideClose.title = editing ? 'Finish writing; the guide stays in the link' : 'Close this guide';
@@ -1144,13 +1140,11 @@ function wireGuide() {
   ui.marks = document.getElementById('marks');
   ui.guideKicker = document.getElementById('guide-kicker');
   ui.guideAdd = document.getElementById('guide-add');
-  ui.guideEdit = document.getElementById('guide-edit');
   ui.guideOffer = document.getElementById('guide-offer');
   ui.guideClose = document.getElementById('guide-close');
   ui.mixer = document.getElementById('mixer');
   ui.guideContinue.addEventListener('click', () => { guideWaiting = false; play(); });
   ui.guideAdd.addEventListener('click', startTip);
-  ui.guideEdit.addEventListener('click', () => (guide && guide.editing ? finishEditing() : editGuide()));
   ui.guideOffer.addEventListener('click', openOfferSheet);
   // While writing, the close button finishes writing and shows the guide as
   // readers will see it; the guide stays in the link. Closing that view
@@ -1214,28 +1208,6 @@ function newGuide() {
   closeGuide(false);
   const lang = (navigator.language || 'en').split('-')[0].toLowerCase();
   openGuide({ param: null, title: '', lang, by: '', url: '', tips: [], editing: true });
-  draftChanged();
-}
-
-// Turns the open guide into a draft of its own: a template becomes a
-// starting point, a shared guide a copy to revise. The copy is the new
-// author's, so it is named after its source and the credit is left for
-// them to give later.
-function editGuide() {
-  if (!guide || guide.editing || guide.error) return;
-  guide = {
-    ...guide,
-    param: null,
-    editing: true,
-    title: guide.title ? guide.title.replace(/ \(copy\)$/, '') + ' (copy)' : '',
-    by: '',
-    url: '',
-    notice: '',
-    tips: guide.tips.map(s => ({ ...s, solo: [...s.solo], mute: [...s.mute], gains: { ...s.gains } })),
-  };
-  guideIndex = -1;
-  renderGuide();
-  guideSync(false);
   draftChanged();
 }
 
