@@ -357,10 +357,8 @@ h1 {
 .guide-by { color: inherit; }
 a.guide-by { text-decoration: underline; text-underline-offset: 3px; }
 a.guide-by:hover { color: var(--gold); }
-/* Edit / Save keeps one spot, beside the close button, in every mode. */
-.btn.guide-edit { margin-left: auto; }
-.btn.guide-edit[hidden] + .btn.guide-close { margin-left: auto; }
 .btn.guide-close {
+  margin-left: auto;
   min-width: 34px;
   padding: 0;
   font-size: 20px;
