@@ -19,6 +19,11 @@ channel with mute, solo, and a fader, playing in sync.
 - `scripts/add-song.sh` — download a FLAC from archive.org, separate it with
   BS-Roformer-SW (`audio-separator`), encode the stems, register the song in
   `songs.json`
+- `scripts/check-songs.py` — checks `songs.json` and `bands.json` strictly,
+  as the player reads them: every field present and of the right kind, no
+  unknown fields, the band in `bands.json`, the date a date, the five stem
+  files in `dir`. A pull request that breaks either fails its "Check data"
+  workflow, and a merged one fails the deploy.
 - `scripts/social-card.html` — source for `social.png`, the link-preview image.
   Regenerate after editing it with headless Chrome:
   `"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless=new --hide-scrollbars --virtual-time-budget=8000 --window-size=1200,630 --screenshot=social.png file://$PWD/scripts/social-card.html`
@@ -77,7 +82,24 @@ Guides are written as plain text:
 
 Guides kept in the repo live at `guides/<song id>/<slug>.txt` in the text
 form below, listed by slug under the song id in `guides.json`; they appear as
-pills under the song and open with `guide=<slug>`.
+pills under the song and open with `guide=<slug>`. `guides.json` is derived
+from the files: the deploy workflows regenerate it before publishing, and
+`python3 scripts/guides-index.py` rewrites it locally (`--lint` only
+checks the guides, `--check` also tells whether `guides.json` is current).
+The script parses every guide strictly, as the player would, and fails on
+a line it cannot read, an unknown player or key, a missing title or a
+folder that is not a song id: a pull request with a broken guide fails its
+"Check data" workflow, and a merged one fails the deploy.
+
+To offer a guide to the library, press **Contribute** on a guide you wrote
+(or one that reached you by link). A sheet asks for the title, your name,
+an optional link for it and the notes' language, shows the text as it will
+be submitted, and opens GitHub with the file ready at
+`guides/<song id>/<slug>.txt`. Committing it there proposes the change as a
+pull request (GitHub forks the repo for anyone without push access), and the
+single new file is the whole contribution. **Copy text** is for sending the
+guide some other way. The title, name and link are written into the guide's
+link as well.
 
 A guide travels in the link: `#songid&guide=<slug>` for one in the repo, or
 `guide=z…`, the deflated text, for one written in the player or by hand. To

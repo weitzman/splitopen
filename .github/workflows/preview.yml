@@ -21,6 +21,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Check the songs and bands
+        run: python3 scripts/check-songs.py
+
+      - name: Index the guides
+        run: python3 scripts/guides-index.py
+
       - name: Deploy preview
         uses: rossjrw/pr-preview-action@v1
         with:
