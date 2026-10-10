@@ -672,7 +672,7 @@ function mediaSessionPosition() {
 // presses Continue. The text form is the format:
 //
 //   lang: en
-//   title: Spotlight
+//   title: Solos
 //   by: Moshe Weitzman
 //   url: https://weitzman.github.io
 //   0:00 to=0:30 solo=drums | Fish alone on drums.
@@ -684,31 +684,10 @@ function mediaSessionPosition() {
 // m:ss, then any of to=m:ss (where the tip ends; without it, at the next
 // tip), solo=, mute=, g= (as in the hash) and pause, then `|` and the note.
 // A later tip may start earlier than the one before it ends, which is how a
-// passage is replayed. The hash carries a guide as
-// guide=<name> for a built-in template, or guide=z<base64url of the deflated
-// text> for one written by hand; SplitOpen.guideLink(text) in the console
-// makes such a link.
-
-const GUIDE_TEMPLATES = {
-  spotlight: {
-    title: 'Spotlight',
-    lang: 'en',
-    by: 'Moshe Weitzman',
-    url: 'https://weitzman.github.io',
-    build() {
-      const order = ['drums', 'bass', 'keys', 'guitar', 'vocals'];
-      const stems = order.map(id => STEMS.find(s => s.id === id)).filter(Boolean);
-      const seg = Math.max(10, Math.min(30, Math.floor(duration / (stems.length + 1))));
-      const alone = s => s.id === 'vocals' ? 'Just the vocals.' : `${s.who} alone on ${s.inst.toLowerCase()}.`;
-      const tips = stems.map((s, i) => ({ ...emptyTip(i * seg), to: (i + 1) * seg, solo: [s.id], note: alone(s) }));
-      tips[0].note = `Each player alone in turn, then everyone together. First, ${alone(stems[0]).replace(/\.$/, '')}. `
-        + 'Listen for how the kick and snare lock to the hi-hat, where the fills land against the bar line, '
-        + 'and how the tempo breathes between sections. With nothing else in the way, the drums tell you '
-        + 'where the band is headed before anyone else does.';
-      return tips;
-    },
-  },
-};
+// passage is replayed. The hash carries a guide as guide=<slug> for one
+// kept in the repo (see guides.json), or guide=z<base64url of the deflated
+// text> for one written in the player or by hand; SplitOpen.guideLink(text)
+// in the console makes such a link.
 
 function emptyTip(at) {
   return { at, to: null, solo: [], mute: [], gains: {}, pause: false, note: '' };
@@ -782,17 +761,47 @@ window.SplitOpen = {
   },
 };
 
+// The library: guides.json maps a song id to the slugs of the guides kept
+// under guides/<song id>/<slug>.txt. Their headers are read when the song
+// loads so the chips can show title and author.
+let repoGuides = {};        // song id -> [slug]
+let repoGuideMeta = {};     // slug -> { title, by } for the current song
+
 let guideParam = null;  // the hash's guide=, kept while the guide itself loads
 let guide = null;       // { param, title, lang, tips }
 let guideIndex = -1;    // the tip the playhead is in; -1 before the first
 let guideWaiting = false; // paused by a `pause` tip, waiting for Continue
 
+function repoGuideUrl(slug) {
+  return `guides/${song.id}/${slug}.txt`;
+}
+
+async function fetchRepoGuide(slug) {
+  const r = await fetch(repoGuideUrl(slug), { cache: 'no-cache' });
+  if (!r.ok) throw new Error(`guide ${slug} not found`);
+  return r.text();
+}
+
 async function resolveGuide(param) {
-  const tpl = GUIDE_TEMPLATES[param];
-  if (tpl) return { param, title: tpl.title, lang: tpl.lang, by: tpl.by || '', url: tpl.url || '', tips: tpl.build() };
-  const g = parseGuideText(await decodeGuide(param));
+  const inRepo = (repoGuides[song.id] || []).includes(param);
+  const g = parseGuideText(inRepo ? await fetchRepoGuide(param) : await decodeGuide(param));
   if (!/^https?:\/\//i.test(g.url)) g.url = ''; // only web links, never javascript:
   return { param, title: g.title, lang: g.lang || 'en', by: g.by, url: g.url, tips: g.tips };
+}
+
+// Reads the headers of this song's library guides for the chips.
+async function loadRepoGuideMeta() {
+  const id = song.id;
+  repoGuideMeta = {};
+  await Promise.all((repoGuides[id] || []).map(async slug => {
+    try {
+      const g = parseGuideText(await fetchRepoGuide(slug));
+      if (song && song.id === id) repoGuideMeta[slug] = { title: g.title, by: g.by };
+    } catch (err) {
+      console.error(err);
+    }
+  }));
+  if (song && song.id === id) renderGuideChips();
 }
 
 // Brings the open guide in line with the hash's guide= value.
@@ -807,7 +816,10 @@ async function syncGuide(state) {
     g = await resolveGuide(want);
   } catch (err) {
     console.error(err);
-    g = { param: want, title: 'Guide', lang: 'en', by: '', url: '', tips: [], error: 'This link holds a guide this browser cannot read.' };
+    const error = want[0] === 'z'
+      ? 'This link holds a guide this browser cannot read.'
+      : `There is no guide called \u201c${want}\u201d for this song.`;
+    g = { param: want, title: 'Guide', lang: 'en', by: '', url: '', tips: [], error };
   }
   if (!channels.length || guideParam !== want) return; // moved on meanwhile
   openGuide(g);
@@ -1074,7 +1086,7 @@ function renderGuideNow() {
 }
 
 // The chips under the song list, in the song chips' style with the author
-// where the band would be: one per built-in template, plus the open guide
+// where the band would be: the song's library guides, plus the open guide
 // when it arrived in the link.
 function renderGuideChips() {
   const row = document.getElementById('guides');
@@ -1084,8 +1096,12 @@ function renderGuideChips() {
   label.className = 'guides-label';
   label.textContent = 'Guides';
   row.appendChild(label);
-  const entries = Object.entries(GUIDE_TEMPLATES).map(([param, tpl]) => ({ param, title: tpl.title, by: tpl.by }));
-  if (guide && !GUIDE_TEMPLATES[guide.param]) entries.push(guide);
+  const entries = [];
+  for (const slug of repoGuides[song.id] || []) {
+    const meta = repoGuideMeta[slug] || { title: slug, by: '' };
+    entries.push({ param: slug, title: meta.title, by: meta.by });
+  }
+  if (guide && !(repoGuides[song.id] || []).includes(guide.param)) entries.push(guide);
   for (const { param, title, by } of entries) {
     const btn = document.createElement('button');
     btn.className = 'song chip';
@@ -1840,6 +1856,7 @@ async function loadSong(state) {
     ...((song.channels || {})[slot.id] || {}),
   }));
   renderHeader();
+  loadRepoGuideMeta();
   setPlayButton(false);
 
   const mixer = document.getElementById('mixer');
@@ -1884,9 +1901,10 @@ async function loadSong(state) {
   mediaSessionInstall();
   tick();
   try {
-    [songs, bands] = await Promise.all([
+    [songs, bands, repoGuides] = await Promise.all([
       fetch('songs.json', { cache: 'no-cache' }).then(r => r.json()),
       fetch('bands.json', { cache: 'no-cache' }).then(r => r.json()),
+      fetch('guides.json', { cache: 'no-cache' }).then(r => (r.ok ? r.json() : {})).catch(() => ({})),
     ]);
   } catch (err) {
     document.getElementById('loading-label').textContent = 'Failed to load song list: ' + err.message;
