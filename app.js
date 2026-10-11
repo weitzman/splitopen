@@ -1014,10 +1014,7 @@ function renderGuide() {
   ui.guideKicker.textContent = tipEditing ? 'Editing a tip' : editing ? 'Tips' : 'Guide';
   ui.guideTitle.hidden = editing;
   ui.guideAdd.hidden = !editing || tipEditing;
-  ui.guideEdit.textContent = 'Copy & edit';
-  // The tip list is always saved, so there is nothing to save; the button
-  // only offers to copy a guide being read.
-  ui.guideEdit.hidden = editing || !!guide.error || !window.CompressionStream;
+  ui.guideEdit.hidden = !canEdit();
   ui.guideOffer.hidden = tipEditing || !canOffer();
   ui.guideClose.hidden = tipEditing;
   ui.guideClose.title = editing ? 'Finish writing; the guide stays in the link' : 'Close this guide';
@@ -1150,7 +1147,7 @@ function wireGuide() {
   ui.mixer = document.getElementById('mixer');
   ui.guideContinue.addEventListener('click', () => { guideWaiting = false; play(); });
   ui.guideAdd.addEventListener('click', startTip);
-  ui.guideEdit.addEventListener('click', () => (guide && guide.editing ? finishEditing() : editGuide()));
+  ui.guideEdit.addEventListener('click', editGuide);
   ui.guideOffer.addEventListener('click', openOfferSheet);
   // While writing, the close button finishes writing and shows the guide as
   // readers will see it; the guide stays in the link. Closing that view
@@ -1217,22 +1214,18 @@ function newGuide() {
   draftChanged();
 }
 
-// Turns the open guide into a draft of its own: a template becomes a
-// starting point, a shared guide a copy to revise. The copy is the new
-// author's, so it is named after its source and the credit is left for
-// them to give later.
+// A guide that lives in its link, rather than the library, can go back to
+// writing: reading it and writing it are the same guide, so the headers
+// stay and the link keeps carrying it.
+function canEdit() {
+  return !!guide && !guide.editing && !guide.error && !guideInLibrary() && !!window.CompressionStream;
+}
+
 function editGuide() {
-  if (!guide || guide.editing || guide.error) return;
-  guide = {
-    ...guide,
-    param: null,
-    editing: true,
-    title: guide.title ? guide.title.replace(/ \(copy\)$/, '') + ' (copy)' : '',
-    by: '',
-    url: '',
-    notice: '',
-    tips: guide.tips.map(s => ({ ...s, solo: [...s.solo], mute: [...s.mute], gains: { ...s.gains } })),
-  };
+  if (!canEdit()) return;
+  guideWaiting = false;
+  guide.editing = true;
+  guide.notice = '';
   guideIndex = -1;
   renderGuide();
   guideSync(false);
@@ -1432,18 +1425,14 @@ function buildTipEditor(tip, i) {
 //
 // A guide written in the player lives in its link. Contribute offers it to
 // the library, where it appears under the song for everyone: the sheet asks
-// for the title, author and language that writing left out, then opens
-// GitHub's new-file page with the guide prefilled at guides/<song>/<slug>.txt.
-// Committing there proposes the change as a pull request (GitHub forks the
-// repo for anyone without push access), and the deploy regenerates
-// guides.json from the files, so the one new file is the whole contribution.
-// There is no server here, so the GitHub account is the contributor's own;
-// Copy text covers anyone who would rather send the guide another way.
+// for the title, author and language that writing left out, then opens the
+// mail app with the guide addressed to the library. The maintainer adds it
+// as guides/<song>/<slug>.txt, and the deploy regenerates guides.json from
+// the files. Copy text covers sending the guide any other way.
 
-const REPO_URL = 'https://github.com/weitzman/splitopen';
-const REPO_BRANCH = 'main';
+const OFFER_EMAIL = 'splitopen@cyrve.com';
+const OFFER_MAIL_MAX = 2000; // what mail apps are known to take from a mailto link
 const AUTHOR_KEY = 'splitopen.author'; // the name and link, so they are typed once
-const OFFER_URL_MAX = 7000; // past this GitHub may refuse the link; the text goes by clipboard instead
 
 function guideSlug(title) {
   const s = title.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
@@ -1496,16 +1485,6 @@ function offerDraft() {
   };
 }
 
-function offerFileUrl(slug, text) {
-  const q = new URLSearchParams({
-    filename: slug + '.txt',
-    value: text,
-    message: `Add guide: ${ui.offerTitle.value.trim()} (${song.title})`,
-  });
-  // %20 rather than + for spaces, which GitHub's editor is known to take.
-  return `${REPO_URL}/new/${REPO_BRANCH}/guides/${encodeURIComponent(song.id)}?${String(q).replace(/\+/g, '%20')}`;
-}
-
 function setOfferStatus(text, kind = '') {
   ui.offerStatus.textContent = text;
   ui.offerStatus.className = 'offer-status' + (kind ? ' ' + kind : '');
@@ -1531,63 +1510,83 @@ function renderOfferPreview() {
   ui.offerText.textContent = guideText(offerDraft());
 }
 
-// Open pull request: the guide takes the headers, its link is rewritten
-// with them, and GitHub opens in a new tab with the file ready to commit.
-// The tab has to open inside the click, before any await, or the browser
-// counts it as a popup; the hash is brought up to date afterwards.
-function submitOffer(e) {
-  e.preventDefault();
-  if (!canOffer()) return ui.offerSheet.close();
+// The form checked: the draft with its slug, or null with the problem shown.
+function checkedOffer() {
   const draft = offerDraft();
   if (!draft.title) {
     setOfferStatus('Give the guide a title.', 'error');
-    return ui.offerTitle.focus();
+    ui.offerTitle.focus();
+    return null;
   }
   if (!ui.offerLang.checkValidity()) {
     setOfferStatus('The language is a code like en or fr.', 'error');
-    return ui.offerLang.focus();
+    ui.offerLang.focus();
+    return null;
   }
   if (!offerUrlOk()) {
     setOfferStatus('The link needs a site, like example.com/you.', 'error');
-    return ui.offerUrl.focus();
+    ui.offerUrl.focus();
+    return null;
   }
   const slug = guideSlug(draft.title);
   if ((repoGuides[song.id] || []).includes(slug)) {
     setOfferStatus(`The library already has a guide at “${slug}” for this song; give yours another title.`, 'error');
-    return ui.offerTitle.focus();
+    ui.offerTitle.focus();
+    return null;
   }
-  const text = guideText(draft);
-  let url = offerFileUrl(slug, text);
-  let notice = 'Finish the pull request on GitHub. The guide stays in this link meanwhile.';
-  if (url.length > OFFER_URL_MAX) {
-    // Too long for a link: GitHub gets the file name and the text travels
-    // by clipboard, which still honors this click.
-    copyText(text);
-    url = offerFileUrl(slug, '');
-    notice = 'The guide is too long for a link, so its text is copied: paste it into the file on GitHub, then finish the pull request.';
-  }
-  const win = window.open(url, '_blank', 'noopener');
-  if (!win) {
-    setOfferStatus('The browser blocked the GitHub tab. ', 'error');
-    const a = document.createElement('a');
-    a.href = url;
-    a.target = '_blank';
-    a.rel = 'noopener';
-    a.textContent = 'Open it here.';
-    ui.offerStatus.appendChild(a);
-  } else {
-    ui.offerSheet.close();
-  }
+  return { draft, slug, text: guideText(draft) };
+}
+
+// After an offer goes out: the headers are kept for next time and written
+// into the open guide and its link, and the notice says what is left to do.
+function offerSent(draft, text, notice) {
   saveAuthor(draft.by, draft.url);
   Object.assign(guide, { title: draft.title, by: draft.by, url: draft.url, lang: draft.lang, notice });
   renderGuide();
   guideSync(false);
-  encodeGuide(text).then(param => {
+  return encodeGuide(text).then(param => {
     if (!guide || guide.editing) return;
     guide.param = guideParam = param;
     writeHash();
     renderGuideChips();
   });
+}
+
+// Email it: the mail app opens with the guide addressed to the library, the
+// text in the body along with the song, the file it would become and the
+// guide's link. A mailto link is a navigation, not a popup, so it may
+// follow the await that brings the link up to date. Mail apps cap the
+// length they take from a link, so a long guide travels by clipboard and
+// the body says to paste it.
+async function submitOffer(e) {
+  e.preventDefault();
+  if (!canOffer()) return ui.offerSheet.close();
+  const checked = checkedOffer();
+  if (!checked) return;
+  const { draft, slug, text } = checked;
+  ui.offerSheet.close();
+  let notice = `Send the email your mail app opened, to ${OFFER_EMAIL}. The guide stays in this link meanwhile.`;
+  await offerSent(draft, text, notice);
+  const link = location.href.split('#')[0] + '#' + song.id + '&guide=' + guide.param;
+  const head = `A guide for ${song.title}, for the library.\n\nSong: ${song.id}\nFile: guides/${song.id}/${slug}.txt\nLink: ${link}\n\n`;
+  let url = offerMailUrl(draft, head + text);
+  if (url.length > OFFER_MAIL_MAX) {
+    copyText(text);
+    url = offerMailUrl(draft, head + '(The guide text is pasted below.)\n\n');
+    notice = `The guide is too long for your mail app to take from a link, so its text is copied: paste it into the email, then send it to ${OFFER_EMAIL}.`;
+    guide.notice = notice;
+    renderGuide();
+  }
+  location.href = url;
+}
+
+function offerMailUrl(draft, body) {
+  const q = new URLSearchParams({
+    subject: `Guide: ${draft.title} (${song.title})`,
+    body: body.replace(/\r?\n/g, '\r\n'),
+  });
+  // Mail apps read percent-encoding, not form encoding: spaces as %20.
+  return `mailto:${OFFER_EMAIL}?${String(q).replace(/\+/g, '%20')}`;
 }
 
 function copyText(text) {
