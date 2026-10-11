@@ -93,12 +93,12 @@ folder that is not a song id: a pull request with a broken guide fails its
 To offer a guide to the library, press **Contribute** on a guide you wrote
 (or one that reached you by link). A sheet asks for the title, your name,
 an optional link for it and the notes' language, shows the text as it will
-be submitted, and opens GitHub with the file ready at
-`guides/<song id>/<slug>.txt`. Committing it there proposes the change as a
-pull request (GitHub forks the repo for anyone without push access), and the
-single new file is the whole contribution. **Copy text** is for sending the
-guide some other way. The title, name and link are written into the guide's
-link as well.
+be submitted, and **Email it** opens the mail app with the guide addressed
+to splitopen@cyrve.com, along with the song, the file it would become
+(`guides/<song id>/<slug>.txt`) and its link; the maintainer adds the file.
+**Copy text** is for sending the guide some other way. The title, name and
+link are written into the guide's link as well. A guide that is not yet in
+the library has an **Edit** button, which goes back to writing it.
 
 A guide travels in the link: `#songid&guide=<slug>` for one in the repo, or
 `guide=z…`, the deflated text, for one written in the player or by hand. To
