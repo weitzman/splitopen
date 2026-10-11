@@ -70,7 +70,8 @@
       <span class="guide-kicker" id="guide-kicker">Guide</span>
       <span class="guide-title" id="guide-title"></span>
       <button class="btn guide-add" id="guide-add" title="Start a tip here, with the current mix (N)" hidden>Tip: Start</button>
-      <button class="btn guide-offer" id="guide-offer" title="Offer this guide to the library, as a pull request on GitHub" hidden>Contribute</button>
+      <button class="btn guide-edit" id="guide-edit" title="Go back to writing this guide" hidden>Edit</button>
+      <button class="btn guide-offer" id="guide-offer" title="Offer this guide to the library, by email" hidden>Contribute</button>
       <button class="btn guide-close" id="guide-close" aria-label="Close guide">&times;</button>
     </div>
     <p class="guide-status" id="guide-status" hidden></p>
@@ -128,7 +129,7 @@
 <dialog class="sheet offer-sheet" id="offer-sheet" aria-labelledby="offer-sheet-title">
   <form id="offer-form" method="dialog" novalidate>
     <h2 class="sheet-title" id="offer-sheet-title">Contribute this guide</h2>
-    <p class="offer-intro">Guides in the library appear under the song for everyone. Name yours, then open it as a pull request on GitHub; the author's name and link are shown with the guide.</p>
+    <p class="offer-intro">Guides in the library appear under the song for everyone. Name yours, then email it to the library; the author's name and link are shown with the guide.</p>
     <label class="offer-field">
       <span class="offer-label">Guide title</span>
       <input id="offer-title" type="text" required maxlength="80" autocomplete="off" placeholder="e.g. Solos, or Mike's entrance">
@@ -157,7 +158,7 @@
       <button class="more" id="offer-copy" type="button" title="Copy the guide text, to send another way">Copy text</button>
       <span class="spacer"></span>
       <button class="btn" id="offer-cancel" type="button">Cancel</button>
-      <button class="btn use" id="offer-go" type="submit">Open pull request</button>
+      <button class="btn use" id="offer-go" type="submit" title="Open your mail app with the guide addressed to the library">Email it</button>
     </div>
   </form>
 </dialog>
