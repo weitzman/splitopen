@@ -123,5 +123,10 @@ preview at `https://weitzman.github.io/splitopen/pr-preview/pr-<number>/`,
 linked from a comment on the PR and removed when it closes. Links to the
 old `/web/` path redirect to the root.
 
-Source recordings come from the [Live Music Archive](https://archive.org/details/etree)
-and are for non-commercial listening only.
+## License
+
+The code and documentation in this repository are released under the
+[MIT License](LICENSE).
+
+The audio stems under `audio/songs/` are not covered by this license. They
+are derived from recordings whose copyright remains with their owners.
