@@ -1182,11 +1182,16 @@ function renderGuideNow() {
 
 // The pills under the song title: the song's library guides, plus the open
 // guide when it arrived in the link. Titles only; the author is shown in
-// the panel.
+// the panel. The row is shown only with ?guide=1 in the query string while
+// the feature settles; a guide in the hash still opens without it.
+function guidesEnabled() {
+  return new URLSearchParams(location.search).get('guide') === '1';
+}
+
 function renderGuideChips() {
   const row = document.getElementById('guides');
   row.innerHTML = '';
-  if (!song) return;
+  if (!song || !guidesEnabled()) return;
   const label = document.createElement('span');
   label.className = 'guides-label';
   label.textContent = 'Guides';

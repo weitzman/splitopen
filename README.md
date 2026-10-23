@@ -43,6 +43,10 @@ copies it with the current position.
 
 ## Guides
 
+The **Guides** row under the song title is shown only with `?guide=1` in
+the query string (before the hash) while the feature settles; a guide in
+the link still opens without it.
+
 A guide is a listening tour of a song: an ordered list of tips, each a
 passage, a mix, and a note. The mix holds for the passage and the band plays
 in full between tips; when the playhead reaches a tip its note is shown.
