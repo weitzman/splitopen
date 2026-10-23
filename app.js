@@ -444,6 +444,7 @@ function mixUsed() {
 function noteMixUsed() {
   try { localStorage.setItem(MIX_USED_KEY, '1'); } catch (_) { /* private mode */ }
   updateHints();
+  tipsMixUsed();
 }
 
 function clearSoloHint() {
@@ -474,6 +475,91 @@ function updateHints() {
   const wantSolo = loaded && playing && !mixing && !mixUsed();
   if (!wantSolo) clearSoloHint();
   else if (hintTimer === null) advanceSoloHint();
+}
+
+// ---------- tips ----------
+//
+// A three-line tour for a new listener, one tip at a time in the line under
+// the transport: Play, a few seconds after the first song is ready; Solo, a
+// few seconds into playback (skipped if they have ever used solo or mute,
+// remembered in localStorage like the S-button glow, or a link or guide set
+// the mix); and the song picker half a minute after that. Pressing Play retires the first tip, pressing S or M the second, and
+// changing songs ends the tour early, since they've found everything.
+
+const TIP_LOAD_DELAY = 3000;   // song ready -> Play tip
+const TIP_PLAY_DELAY = 4000;   // playing -> Solo tip
+const TIP_SONGS_DELAY = 30000; // Solo tip -> songs tip
+const TIP_FADE = 600;          // matches the CSS transition
+const TIPS = {
+  play: 'Press <em>Play</em>, and soak in sound',
+  solo: 'Click <em>Solo</em>, and smile',
+  songs: 'Change songs, as you wish',
+};
+let tipStage = 'load'; // load -> play -> solo -> songs -> done
+let tipTimer = null;
+let tipShown = null;   // key of the tip on screen, or null
+let tipSwap = null;
+
+function showTip(key) {
+  clearTimeout(tipSwap);
+  if (!key) {
+    tipShown = null;
+    ui.tip.classList.remove('on');
+    return;
+  }
+  const reveal = () => {
+    tipShown = key;
+    ui.tipText.innerHTML = TIPS[key];
+    ui.tip.classList.add('on');
+  };
+  if (!tipShown) return reveal();
+  // Let the old line fade out before the new one fades in.
+  ui.tip.classList.remove('on');
+  tipSwap = setTimeout(reveal, TIP_FADE);
+}
+
+// The first song has loaded and Play is on screen.
+function tipsSongReady() {
+  if (tipStage !== 'load') return;
+  tipStage = 'play';
+  tipTimer = setTimeout(() => showTip('play'), TIP_LOAD_DELAY);
+}
+
+// Playback started or stopped. The Solo tip waits for a few seconds of
+// uninterrupted playing, so a pause before then restarts its clock.
+function tipsPlaying(on) {
+  if (tipStage === 'play' && on) {
+    clearTimeout(tipTimer);
+    showTip(null);
+    tipStage = 'solo';
+  }
+  if (tipStage === 'solo') {
+    clearTimeout(tipTimer);
+    if (on) tipTimer = setTimeout(tipsSolo, TIP_PLAY_DELAY);
+  }
+}
+
+function tipsSolo() {
+  const mixing = channels.some(c => c.solo || c.mute);
+  if (!mixing && !mixUsed()) showTip('solo');
+  tipStage = 'songs';
+  tipTimer = setTimeout(() => {
+    tipStage = 'done';
+    showTip('songs');
+  }, TIP_SONGS_DELAY);
+}
+
+// S or M was pressed: the Solo tip has done its job.
+function tipsMixUsed() {
+  if (tipShown === 'solo') showTip(null);
+}
+
+// The listener picked another song: nothing left to point out.
+function tipsSongChanged() {
+  if (tipStage === 'done' && !tipShown) return;
+  clearTimeout(tipTimer);
+  tipStage = 'done';
+  showTip(null);
 }
 
 // ---------- transport ----------
@@ -516,6 +602,7 @@ function setPlayButton(on) {
   ui.play.classList.toggle('playing', on);
   ui.play.setAttribute('aria-label', on ? 'Pause' : 'Play');
   updateHints();
+  tipsPlaying(on);
   mediaSessionState(on);
 }
 
@@ -1851,6 +1938,8 @@ function wireTransport() {
   ui.cur = document.getElementById('time-cur');
   ui.dur = document.getElementById('time-dur');
   ui.share = document.getElementById('share');
+  ui.tip = document.getElementById('tip');
+  ui.tipText = document.getElementById('tip-text');
 
   ui.play.addEventListener('click', () => playing ? pause() : play());
   ui.share.addEventListener('click', shareLink);
@@ -2043,6 +2132,7 @@ async function loadSong(state) {
   if (song && next.id === song.id) return;
   const token = ++loadToken;
 
+  if (song) tipsSongChanged();
   closeGuide(false);
   teardownChannels();
   hashPos = null;
@@ -2083,6 +2173,7 @@ async function loadSong(state) {
     document.getElementById('transport').hidden = false;
     applyMixState(state);
     syncGuide(state);
+    tipsSongReady();
     warmOtherSongs(song);
   } catch (err) {
     if (token !== loadToken) return;
