@@ -752,6 +752,9 @@ li.looping .icon.loop { background: var(--gold); border-color: var(--gold); colo
 .play .icon-pause { display: none; }
 .play.playing .icon-play { display: none; }
 .play.playing .icon-pause { display: block; }
+/* Play is on but the next segment has not arrived yet */
+.play.buffering { animation: buffering 1s ease-in-out infinite; }
+@keyframes buffering { 50% { opacity: 0.4; } }
 
 .time { font-variant-numeric: tabular-nums; color: var(--muted); font-size: 14px; min-width: 44px; text-align: center; }
 .seek-wrap { flex: 1; min-width: 0; position: relative; display: flex; align-items: center; }

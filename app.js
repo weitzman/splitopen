@@ -1,22 +1,20 @@
 // Split Open — multi-stem player built on the Web Audio API.
-// All stems are decoded up front and started on the same AudioContext clock,
-// so they stay sample-locked; mute/solo/fader are just gain changes.
-//
-// Switching songs is kept cheap three ways: the context runs at the stems'
-// native 48 kHz so decoding skips a resample, decoded songs stay in a
-// memory-bounded cache, and the other songs are fetched (and, budget
-// permitting, decoded) in the background once the current one is ready.
+// Each stem is served as short Opus segments (see scripts/segment-stems.py)
+// that are fetched and decoded a little ahead of the playhead and started on
+// the same AudioContext clock at their exact positions, so the stems stay
+// sample-locked across segment boundaries; mute/solo/fader are just gain
+// changes. Playback begins as soon as the segment under the playhead is
+// decoded for every stem; decoded audio is kept within a memory budget.
 
 // Fixed stem slots; who plays each one comes from bands.json per song.
 const SLOTS = [
-  { id: 'guitar', file: 'guitar.opus', color: 'var(--trey)' },
-  { id: 'bass',   file: 'bass.opus',   color: 'var(--mike)' },
-  { id: 'keys',   file: 'keys.opus',   color: 'var(--page)' },
-  { id: 'drums',  file: 'drums.opus',  color: 'var(--fish)' },
-  { id: 'vocals', file: 'vocals.opus', color: 'var(--vox)' },
+  { id: 'guitar', color: 'var(--trey)' },
+  { id: 'bass',   color: 'var(--mike)' },
+  { id: 'keys',   color: 'var(--page)' },
+  { id: 'drums',  color: 'var(--fish)' },
+  { id: 'vocals', color: 'var(--vox)' },
 ];
 let STEMS = SLOTS;
-const STEM_FILES = SLOTS.map(s => s.file);
 
 // The stems are Opus, which always decodes at 48 kHz. Matching the context
 // rate avoids resampling every stem on decode, which is roughly 3x slower
@@ -26,12 +24,10 @@ const ctx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate:
 const master = ctx.createGain();
 master.connect(ctx.destination);
 
-// iOS Safari gives a tab on the order of 1 GB before killing it, and a single
-// 8-minute song decodes to ~920 MB of PCM. It also doesn't report
-// deviceMemory. Treat touch devices that don't report memory as constrained:
-// no decoded-song cache, no background decoding, one stem decoded at a time,
-// and a real page reload on song switch so the old song's buffers are freed
-// before the new one is decoded (GC timing is otherwise not ours to control).
+// iOS Safari gives a tab on the order of 1 GB before killing it, and doesn't
+// report deviceMemory. Treat touch devices that don't report memory as
+// constrained: fewer segments decoded ahead of the playhead, and a smaller
+// budget for decoded audio.
 const LOW_MEMORY = !navigator.deviceMemory && navigator.maxTouchPoints > 1;
 
 // iOS routes Web Audio through the "ambient" audio session, which obeys the
@@ -94,17 +90,51 @@ let songs = [];
 let bands = {};
 let song = null;
 let band = null;
-let channels = []; // { def, buffer, fader, muteGain, analyser, source?, ui }
+let channels = []; // { def, fader, muteGain, analyser, ui }
 let playing = false;
+let buffering = false; // Play is on but the segment under the playhead is not decoded yet
 let startedAt = 0;   // ctx.currentTime when playback started
 let offset = 0;      // position (s) at which playback started
 let duration = 0;
 let loadToken = 0;   // guards against a stale load finishing after a song switch
 
 // ---------- loading ----------
+//
+// A song directory holds meta.json and, per stem, NNN.opus segments: segment
+// N covers seconds [N*segment, (N+1)*segment), and every segment after the
+// first starts `lead` seconds early so the decoder has settled by the time
+// the audible part begins (the player skips the lead).
+//
+// Two caches per song. The compressed bytes of every segment fetched are
+// kept while the song is loaded (~35 MB for an 8-minute song), and once the
+// segments ahead of the playhead are in, the rest of the song is fetched in
+// the background one segment at a time, so a seek costs at most a decode.
+// Decoded PCM is ~19 MB per segment across the five stems, so it is kept
+// under a budget: the segments ahead of the playhead always, and beyond them
+// the most recently used, until the budget is met.
 
-async function fetchStem(url, onProgress, priority) {
-  const res = await fetch(url, { priority });
+const AHEAD = LOW_MEMORY ? 3 : 6; // segments decoded ahead of the playhead
+const DECODE_BUDGET = (LOW_MEMORY ? 192 : Math.min(2048, (navigator.deviceMemory || 2) * 256)) * 1024 * 1024;
+
+let meta = null;         // the current song's meta.json
+let bytes = new Map();   // segment index -> { promise: Promise<ArrayBuffer[]>, ctrl }
+let decoded = new Map(); // segment index -> { promise: Promise<AudioBuffer[]>, result, size }; insertion order = LRU
+
+function segName(k) { return String(k).padStart(3, '0') + '.opus'; }
+function segIndex(t) { return Math.max(0, Math.min(meta.segments - 1, Math.floor(t / meta.segment))); }
+
+// Bytes fetched ahead of need (other songs' first segments), keyed by URL.
+// decodeAudioData detaches the buffer it is given, so an entry is handed
+// over once; after that the URL is fetched again, from the HTTP cache.
+const prefetched = new Map();
+
+async function fetchBytes(url, { signal, priority = 'auto', onProgress } = {}) {
+  if (prefetched.has(url)) {
+    const p = prefetched.get(url);
+    prefetched.delete(url);
+    return p;
+  }
+  const res = await fetch(url, { signal, priority });
   if (!res.ok) throw new Error(`${res.status} ${url}`);
   const total = Number(res.headers.get('content-length')) || 0;
   const reader = res.body.getReader();
@@ -123,149 +153,142 @@ async function fetchStem(url, onProgress, priority) {
   return bytes.buffer;
 }
 
-// Compressed stems, keyed by song id. ~8 MB per stem, so every song fits.
-const byteCache = new Map();   // id -> Promise<ArrayBuffer[]>
-const bytesReady = new Set();  // ids whose fetch has finished
-
-function fetchSongBytes(s, onProgress, priority = 'high') {
-  if (!byteCache.has(s.id)) {
-    const p = Promise.all(STEM_FILES.map((file, i) =>
-      fetchStem(s.dir + file, onProgress && (f => onProgress(i, f)), priority)
-    ));
-    p.then(() => bytesReady.add(s.id), () => byteCache.delete(s.id));
-    byteCache.set(s.id, p);
+const metaCache = new Map(); // song id -> Promise<meta>
+function fetchMeta(s) {
+  if (!metaCache.has(s.id)) {
+    const p = fetch(s.dir + 'meta.json').then(r => {
+      if (!r.ok) throw new Error(`${r.status} ${s.dir}meta.json`);
+      return r.json();
+    });
+    p.catch(() => metaCache.delete(s.id));
+    metaCache.set(s.id, p);
   }
-  return byteCache.get(s.id);
+  return metaCache.get(s.id);
 }
 
-// Decoded stems: ~185 MB per stem for an 8-minute song, so the cache has a
-// byte budget of a quarter of device memory, capped at 2 GB. Browsers that
-// don't report memory (Safari) are assumed to be small. The song playing now
-// is always kept; beyond that, least recently used songs are dropped.
-const decodedCache = new Map(); // id -> Promise<AudioBuffer[]>; insertion order = LRU
-const decodedBytes = new Map(); // id -> bytes once decoded
-const DECODE_BUDGET = LOW_MEMORY ? 0 : Math.min(2048, (navigator.deviceMemory || 2) * 256) * 1024 * 1024;
-
-function bufferBytes(buffers) {
-  return buffers.reduce((n, b) => n + b.length * b.numberOfChannels * 4, 0);
+// The compressed bytes of segment k for every stem of the current song.
+function segBytes(k, { priority, onProgress } = {}) {
+  let b = bytes.get(k);
+  if (b) return b.promise;
+  const ctrl = new AbortController();
+  const dir = song.dir;
+  b = { ctrl };
+  b.promise = Promise.all(STEMS.map((st, i) => fetchBytes(dir + st.id + '/' + segName(k), {
+    signal: ctrl.signal, priority, onProgress: onProgress && (f => onProgress(i, f)),
+  })));
+  b.promise.catch(() => { if (bytes.get(k) === b) bytes.delete(k); });
+  bytes.set(k, b);
+  return b.promise;
 }
 
-function cachedBytesTotal() {
+// Segment k decoded for every stem; using it marks it most recently used.
+function decodeSegment(k, opts) {
+  let d = decoded.get(k);
+  if (d) { touchDecoded(k); return d.promise; }
+  d = { result: null, size: 0 };
+  d.promise = (async () => {
+    const bufs = await segBytes(k, opts);
+    // decodeAudioData detaches its input, so decode a copy and keep the bytes.
+    const result = await Promise.all(bufs.map(b => ctx.decodeAudioData(b.slice(0))));
+    d.result = result;
+    d.size = result.reduce((n, b) => n + b.length * b.numberOfChannels * 4, 0);
+    return result;
+  })();
+  d.promise.then(pump, () => { if (decoded.get(k) === d) decoded.delete(k); });
+  decoded.set(k, d);
+  return d.promise;
+}
+
+function touchDecoded(k) {
+  const d = decoded.get(k);
+  decoded.delete(k);
+  decoded.set(k, d);
+}
+
+function decodedTotal() {
   let n = 0;
-  for (const v of decodedBytes.values()) n += v;
+  for (const d of decoded.values()) n += d.size;
   return n;
 }
 
-function touchDecoded(id) {
-  const p = decodedCache.get(id);
-  decodedCache.delete(id);
-  decodedCache.set(id, p);
-}
-
-function evictDecoded(keepId) {
-  for (const id of decodedCache.keys()) {
-    if (cachedBytesTotal() <= DECODE_BUDGET) return;
-    if (id === keepId || (song && id === song.id) || !decodedBytes.has(id)) continue;
-    decodedCache.delete(id);
-    decodedBytes.delete(id);
+// Decode segment k and the AHEAD after it, then drop the least recently
+// used decoded segments outside that span until the budget is met.
+function keepWindow(k) {
+  if (!meta) return;
+  const hi = Math.min(meta.segments - 1, k + AHEAD);
+  for (let i = k; i <= hi; i++) decodeSegment(i, { priority: i <= k + 1 ? 'high' : 'low' });
+  for (const [i, d] of decoded) {
+    if (decodedTotal() <= DECODE_BUDGET) break;
+    if ((i >= k && i <= hi) || !d.result) continue;
+    decoded.delete(i);
   }
 }
 
-function decodeSong(s, onProgress, priority) {
-  if (decodedCache.has(s.id)) {
-    touchDecoded(s.id);
-    return decodedCache.get(s.id);
+// Fetch the rest of the song's bytes, one segment at a time so the window's
+// own fetches are not crowded, from the playhead onward and then from the top.
+async function fillBytes(token) {
+  if (navigator.connection && navigator.connection.saveData) return;
+  const n = meta.segments, start = segIndex(offset);
+  for (let d = 0; d < n; d++) {
+    if (token !== loadToken) return;
+    try { await segBytes((start + d) % n, { priority: 'low' }); } catch (_) { return; }
   }
-  const p = (async () => {
-    const bytes = await fetchSongBytes(s, onProgress, priority);
-    // decodeAudioData detaches its input, so decode a copy and keep the bytes.
-    // Parallel decoding is faster where there's a thread pool (Chrome), but
-    // on a phone five decoders' scratch space at once is what tips it over.
-    let buffers;
-    if (LOW_MEMORY) {
-      buffers = [];
-      for (const b of bytes) buffers.push(toMono(await ctx.decodeAudioData(b.slice(0))));
-    } else {
-      buffers = await Promise.all(bytes.map(b => ctx.decodeAudioData(b.slice(0))));
-    }
-    decodedBytes.set(s.id, bufferBytes(buffers));
-    evictDecoded(s.id);
-    return buffers;
-  })();
-  p.catch(() => { decodedCache.delete(s.id); decodedBytes.delete(s.id); });
-  decodedCache.set(s.id, p);
-  return p;
 }
 
-async function loadAllStems(s) {
+function dropSegments() {
+  for (const b of bytes.values()) b.ctrl.abort();
+  bytes = new Map();
+  decoded = new Map();
+}
+
+// The first segment of a song goes through the loading bar.
+function loadFirstSegment(k) {
   const fill = document.getElementById('loading-fill');
   const label = document.getElementById('loading-label');
-  const haveBytes = bytesReady.has(s.id);
-  label.textContent = haveBytes ? 'Decoding…' : 'Loading stems…';
-  fill.style.width = haveBytes ? '100%' : '0%';
-  const progress = new Array(STEM_FILES.length).fill(0);
-  const buffers = await decodeSong(s, (i, f) => {
-    progress[i] = f;
-    const pct = progress.reduce((a, b) => a + b, 0) / progress.length * 100;
-    fill.style.width = pct.toFixed(1) + '%';
-    if (pct >= 100) label.textContent = 'Decoding…';
+  label.textContent = 'Loading stems…';
+  fill.style.width = '0%';
+  const progress = new Array(STEMS.length).fill(0);
+  return decodeSegment(k, {
+    priority: 'high',
+    onProgress: (i, f) => {
+      progress[i] = f;
+      const pct = progress.reduce((a, b) => a + b, 0) / progress.length * 100;
+      fill.style.width = pct.toFixed(1) + '%';
+      if (pct >= 100) label.textContent = 'Decoding…';
+    },
   });
-  return buffers;
 }
 
-// Warm the other songs in the background: fetch bytes for all of them, and
-// pre-decode as many as the memory budget allows, nearest in the list first.
+// Warm the other songs in the background: their manifests and first
+// segments, nearest in the list first, so switching songs starts at once.
 let warmToken = 0;
 async function warmOtherSongs(current) {
   const token = ++warmToken;
-  if (LOW_MEMORY) return;
   if (navigator.connection && navigator.connection.saveData) return;
   const listed = listedSongs();
   const i = listed.findIndex(s => s.id === current.id);
-  const order = [];
   for (let d = 1; d < listed.length; d++) {
-    order.push(listed[(i + d) % listed.length]);
-  }
-  for (const s of order) {
+    const s = listed[(i + d) % listed.length];
     if (token !== warmToken) return;
     try {
-      const bytes = await fetchSongBytes(s, null, 'low');
-      if (token !== warmToken) return;
-      const est = bytes.reduce((n, b) => n + estimateDecodedBytes(b), 0);
-      if (cachedBytesTotal() + est <= DECODE_BUDGET) await decodeSong(s, null, 'low');
+      await fetchMeta(s);
+      await Promise.all(STEMS.map(st => {
+        const url = s.dir + st.id + '/' + segName(0);
+        if (prefetched.has(url)) return null;
+        const p = fetchBytes(url, { priority: 'low' });
+        p.catch(() => prefetched.delete(url));
+        prefetched.set(url, p);
+        return p;
+      }));
     } catch (err) {
       console.warn('warm failed', s.id, err);
     }
   }
 }
 
-// On constrained devices each stem is folded to mono right after decoding,
-// which halves what a song costs to keep around (~920 MB -> ~460 MB for an
-// 8-minute song). The phone speaker is mono anyway; headphones lose the
-// stereo image of the separated stems, which is a fair trade for not crashing.
-function toMono(buf) {
-  const n = buf.numberOfChannels;
-  if (n === 1) return buf;
-  const mono = ctx.createBuffer(1, buf.length, buf.sampleRate);
-  const out = mono.getChannelData(0);
-  for (let ch = 0; ch < n; ch++) {
-    const src = buf.getChannelData(ch);
-    for (let i = 0; i < out.length; i++) out[i] += src[i] / n;
-  }
-  return mono;
-}
-
-// Rough decoded size from the compressed size: 128 kbps stereo Opus decoded
-// to Float32 at 48 kHz expands by 24x (48000 * 2 ch * 4 bytes * 8 / 128000).
-// Opus is variable bit rate, so a mostly silent stem comes in well under
-// 128 kbps and this undershoots for it; the cache itself counts real sizes.
-function estimateDecodedBytes(arrayBuffer) {
-  return arrayBuffer.byteLength * 24;
-}
-
 // ---------- graph ----------
 
-function buildChannel(def, buffer) {
+function buildChannel(def) {
   const fader = ctx.createGain();
   const muteGain = ctx.createGain();
   const analyser = ctx.createAnalyser();
@@ -276,16 +299,19 @@ function buildChannel(def, buffer) {
   muteGain.connect(analyser);
   analyser.connect(master);
 
-  return { def, buffer, fader, muteGain, analyser, source: null, mute: false, solo: false };
+  return { def, fader, muteGain, analyser, mute: false, solo: false };
 }
 
 function teardownChannels() {
   clearSoloHint();
   stopSources();
   keepaliveStop();
+  dropSegments();
   for (const c of channels) c.analyser.disconnect();
   channels = [];
+  meta = null;
   playing = false;
+  buffering = false;
   offset = 0;
   duration = 0;
 }
@@ -570,36 +596,100 @@ function position() {
   return playing ? Math.max(offset, Math.min(duration, offset + ctx.currentTime - startedAt)) : offset;
 }
 
-function startSources(from) {
-  const t0 = ctx.currentTime + 0.05;
-  for (const c of channels) {
+// Song time to AudioContext time for the current run of playback.
+function clockAt(t) { return startedAt + (t - offset); }
+
+const scheduled = new Map(); // segment index -> its source nodes, one per stem
+
+// Start segment k of every stem at its place on the clock. A segment's end
+// and the next one's start are the same expression, so they land on the same
+// sample frame: no gap and no overlap at the join.
+function scheduleSegment(k, buffers) {
+  const segStart = k * meta.segment;
+  const segEnd = Math.min(duration, segStart + meta.segment);
+  let from = Math.max(segStart, offset);
+  let when = clockAt(from);
+  const now = ctx.currentTime + 0.02;
+  if (when < now) { from += now - when; when = now; } // scheduled late (a throttled timer): join in where the clock is
+  if (from >= segEnd) return;
+  const until = clockAt(segEnd);
+  const lead = k ? meta.lead : 0;
+  const sources = channels.map((c, i) => {
     const src = ctx.createBufferSource();
-    src.buffer = c.buffer;
+    src.buffer = buffers[i];
     src.connect(c.fader);
-    src.start(t0, from);
-    c.source = src;
-  }
-  // Any one source ending naturally means the track is over.
-  channels[0].source.onended = () => {
-    if (playing && position() >= duration - 0.05) stop(0);
+    src.start(when, lead + (from - segStart));
+    src.stop(until);
+    return src;
+  });
+  sources[0].onended = () => {
+    scheduled.delete(k);
+    // The last segment ending naturally means the track is over.
+    if (k === meta.segments - 1 && playing && position() >= duration - 0.05) stop(0);
   };
-  startedAt = t0;
-  offset = from;
+  scheduled.set(k, sources);
+}
+
+// Keep the window around the playhead decoded, and every decoded segment in
+// it scheduled. Runs on play and seek, whenever a decode lands, and on a
+// timer, so a background tab (where animation frames stop) keeps playing.
+// If the segment under the playhead is not decoded yet, playback waits for it.
+function pump() {
+  if (!playing || !meta) return;
+  const k0 = segIndex(position());
+  keepWindow(k0);
+  if (!decoded.get(k0).result) return rebuffer(k0);
+  for (let k = k0; k < meta.segments && k <= k0 + AHEAD; k++) {
+    const d = decoded.get(k);
+    if (d && d.result && !scheduled.has(k)) scheduleSegment(k, d.result);
+  }
+}
+setInterval(pump, 1000);
+
+let bufferToken = 0;
+function rebuffer(k) {
+  offset = position();
+  stopSources();
+  playing = false;
+  buffering = true;
+  ui.play.classList.add('buffering');
+  const token = ++bufferToken;
+  decodeSegment(k).then(() => {
+    if (token !== bufferToken || !buffering) return;
+    buffering = false;
+    ui.play.classList.remove('buffering');
+    keepaliveSeek(offset);
+    startSources(offset);
+  }, () => { /* aborted by a seek or a song switch, which takes over */ });
+}
+
+// Both the start time and the start offset are snapped to the context's
+// sample grid, so every segment's start and stop land on whole frames.
+// Off the grid, browsers interpolate a source's samples to its sub-sample
+// start, and the two sources meeting at a join do not agree about the frame
+// they share; on the grid the join is sample-exact.
+function startSources(from) {
+  const rate = ctx.sampleRate;
+  startedAt = Math.ceil((ctx.currentTime + 0.05) * rate) / rate;
+  offset = Math.round(from * rate) / rate;
   playing = true;
+  pump();
 }
 
 function stopSources() {
-  for (const c of channels) {
-    if (!c.source) continue;
-    c.source.onended = null;
-    try { c.source.stop(); } catch (_) { /* already stopped */ }
-    c.source.disconnect();
-    c.source = null;
+  for (const sources of scheduled.values()) {
+    for (const src of sources) {
+      src.onended = null;
+      try { src.stop(); } catch (_) { /* already stopped */ }
+      src.disconnect();
+    }
   }
+  scheduled.clear();
 }
 
 function setPlayButton(on) {
   ui.play.classList.toggle('playing', on);
+  if (!on) { buffering = false; ui.play.classList.remove('buffering'); }
   ui.play.setAttribute('aria-label', on ? 'Pause' : 'Play');
   updateHints();
   tipsPlaying(on);
@@ -622,6 +712,7 @@ function pause() {
   offset = position();
   stopSources();
   playing = false;
+  buffering = false;
   keepaliveStop();
   guideWaiting = false;
   stopLoop();
@@ -632,17 +723,20 @@ function pause() {
 function stop(at) {
   stopSources();
   playing = false;
+  buffering = false;
   offset = at;
   keepaliveStop();
   setPlayButton(false);
 }
 
 function seek(to) {
-  const wasPlaying = playing;
+  if (!meta) return;
+  const wasPlaying = playing || buffering;
   stopSources();
   playing = false;
+  buffering = false;
   offset = Math.max(0, Math.min(duration, to));
-  if (wasPlaying) startSources(offset);
+  if (wasPlaying) startSources(offset); else keepWindow(segIndex(offset));
   ui.seek.value = Math.round(offset / duration * 1000);
   ui.cur.textContent = fmt(offset);
   keepaliveSeek(offset);
@@ -2161,11 +2255,16 @@ async function loadSong(state) {
   loading.hidden = false;
 
   try {
-    const buffers = await loadAllStems(song);
+    const m = await fetchMeta(song);
     if (token !== loadToken) return; // user switched songs mid-load
-    duration = Math.max(...buffers.map(b => b.duration));
-    buffers.forEach((buf, i) => {
-      const c = buildChannel(STEMS[i], buf);
+    meta = m;
+    duration = meta.duration;
+    // Only the segment under the playhead has to arrive before the mixer shows.
+    const k0 = segIndex(state.t || 0);
+    await loadFirstSegment(k0);
+    if (token !== loadToken) return;
+    STEMS.forEach((def, i) => {
+      const c = buildChannel(def);
       channels.push(c);
       mixer.appendChild(buildStrip(c, i));
     });
@@ -2177,6 +2276,8 @@ async function loadSong(state) {
     mixer.hidden = false;
     document.getElementById('transport').hidden = false;
     applyMixState(state);
+    keepWindow(segIndex(offset));
+    fillBytes(token);
     syncGuide(state);
     tipsSongReady();
     warmOtherSongs(song);
@@ -2211,23 +2312,13 @@ async function loadSong(state) {
   window.addEventListener('hashchange', () => {
     // Our own replaceState writes never fire this, so it is a song click, a
     // Back/Forward step, or a hand-edited URL. A same-song change only has
-    // to apply the mix; only a new song id loads stems (or reloads the page).
+    // to apply the mix; only a new song id loads stems.
     const state = parseHash();
     if (song && channels.length && findSong(state.id).id === song.id) {
       applyMixState(state);
       return syncGuide(state);
     }
-    if (!(LOW_MEMORY && song)) return fromHash();
-    // Drop every reference to the old song's PCM before the reload. Safari
-    // keeps the same process across a reload and collects the old page's
-    // heap lazily, so the less we leave behind the better.
-    teardownChannels();
-    decodedCache.clear();
-    decodedBytes.clear();
-    byteCache.clear();
-    bytesReady.clear();
-    ctx.close().catch(() => {});
-    location.reload();
+    fromHash();
   });
   fromHash();
 })();
