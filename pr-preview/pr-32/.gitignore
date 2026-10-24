@@ -1,0 +1,7 @@
+# Audio stays out of the repo. Source recordings and raw model output are
+# local only; the encoded segments in audio/songs/ are uploaded to the R2
+# bucket the player reads (scripts/upload-stems.sh).
+audio/src/
+audio/stems/
+audio/songs/
+.DS_Store
