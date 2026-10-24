@@ -2,28 +2,37 @@
 """Checks songs.json and bands.json against what the player expects.
 
 The player (see loadSong in app.js) reads a song's band from bands.json,
-its five stems from `dir`, and optional per-stem overrides from `channels`.
-This script is strict: a missing or mistyped field, an unknown field, a
-band the song names that is not in bands.json, a stem file that is not
-there, or a date that is not a date all fail the run with the song named,
-so a pull request with a broken entry fails its check and a bad merge
-fails the deploy.
+its stems from `dir` (meta.json and, per stem, a directory of Opus
+segments, as scripts/segment-stems.py writes them), and optional per-stem
+overrides from `channels`. `dir` is normally the song's URL in the stems
+bucket, and every file it promises is checked with a HEAD request; a local
+path is checked on disk. This script is strict: a missing or mistyped
+field, an unknown field, a band the song names that is not in bands.json, a
+segment that is not there, or a date that is not a date all fail the run
+with the song named, so a pull request with a broken entry fails its check
+and a bad merge fails the deploy.
 
     python3 scripts/check-songs.py
 """
 import datetime
 import json
+import math
 import os
 import re
 import sys
+import time
+import urllib.request
+from concurrent.futures import ThreadPoolExecutor
 
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
 SLUG = re.compile(r'^[\w-]+$')
 STEMS = ['guitar', 'bass', 'keys', 'drums', 'vocals']
-STEM_FILES = [s + '.opus' for s in STEMS]
+META_FIELDS = ['duration', 'segment', 'lead', 'segments']
 URL = re.compile(r'^https?://\S+$')
 
 SONG_REQUIRED = ['id', 'band', 'title', 'date', 'venue', 'city', 'source', 'dir']
+# r2.dev answers 403 to Python's default User-Agent; any other name is fine.
+HEADERS = {'User-Agent': 'splitopen-check-songs'}
 SONG_OPTIONAL = ['set', 'hidden', 'channels']
 
 
@@ -50,6 +59,67 @@ def text(obj, key, where, errors, required=True):
         errors.append(f'{where}: "{key}" must be a non-empty string')
         return None
     return v
+
+
+def read_meta(d):
+    if URL.match(d):
+        with urllib.request.urlopen(urllib.request.Request(d + 'meta.json', headers=HEADERS), timeout=30) as r:
+            return json.load(r)
+    with open(os.path.join(ROOT, d, 'meta.json'), encoding='utf-8') as f:
+        return json.load(f)
+
+
+def present(d, name):
+    """Whether a file under `dir` exists and is not empty. The public bucket
+    host rate-limits bursts with 429s, so those (and server errors) are
+    retried with a growing pause; only a clear answer counts."""
+    if not URL.match(d):
+        p = os.path.join(ROOT, d, name)
+        return os.path.isfile(p) and os.path.getsize(p) > 0
+    for attempt in range(6):
+        try:
+            with urllib.request.urlopen(urllib.request.Request(d + name, method='HEAD', headers=HEADERS), timeout=30) as r:
+                return r.status == 200 and r.headers.get('Content-Length') != '0'
+        except urllib.error.HTTPError as e:
+            if e.code == 404:
+                return False
+            if e.code != 429 and e.code < 500:
+                raise
+        except OSError:
+            pass
+        time.sleep(0.5 * 2 ** attempt)
+    return False
+
+
+def check_stems(d, where, errors):
+    """meta.json and every segment it promises, for each stem."""
+    try:
+        meta = read_meta(d)
+    except OSError as e:
+        errors.append(f'{where}: cannot read {d}meta.json ({e}); run scripts/segment-stems.py and upload-stems.sh')
+        return
+    except ValueError as e:
+        errors.append(f'{where}: {d}meta.json is not valid JSON ({e})')
+        return
+    if not isinstance(meta, dict):
+        errors.append(f'{where}: {d}meta.json must be an object')
+        return
+    for key in meta:
+        if key not in META_FIELDS:
+            errors.append(f'{where}: {d}meta.json: unknown field "{key}"')
+    for key in META_FIELDS:
+        v = meta.get(key)
+        if not isinstance(v, (int, float)) or isinstance(v, bool) or v < 0 or (v == 0 and key != 'lead'):
+            errors.append(f'{where}: {d}meta.json: "{key}" must be a positive number')
+            return
+    if not isinstance(meta['segments'], int) or meta['segments'] != math.ceil(meta['duration'] / meta['segment']):
+        errors.append(f'{where}: {d}meta.json: "segments" should be {math.ceil(meta["duration"] / meta["segment"])} '
+                      f'for {meta["duration"]} s in {meta["segment"]} s segments')
+    names = [f'{stem}/{k:03d}.opus' for stem in STEMS for k in range(meta['segments'])]
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        for name, ok in zip(names, pool.map(lambda n: present(d, n), names)):
+            if not ok:
+                errors.append(f'{where}: missing or empty segment {d}{name}')
 
 
 def check_channels(channels, where, errors, complete):
@@ -140,14 +210,12 @@ def check_songs(songs, band_ids, errors):
             errors.append(f'{where}: source "{source}" is not a full link')
         d = text(song, 'dir', where, errors)
         if d:
-            if sid and d != f'audio/songs/{sid}/':
-                errors.append(f'{where}: dir should be "audio/songs/{sid}/", not "{d}"')
-            for f in STEM_FILES:
-                p = os.path.join(ROOT, d, f)
-                if not os.path.isfile(p):
-                    errors.append(f'{where}: missing stem {d}{f}')
-                elif os.path.getsize(p) == 0:
-                    errors.append(f'{where}: empty stem {d}{f}')
+            if sid and not d.endswith(f'/{sid}/'):
+                errors.append(f'{where}: dir should end with "/{sid}/", not "{d}"')
+            elif not (URL.match(d) or d.startswith('audio/songs/')):
+                errors.append(f'{where}: dir "{d}" is neither a bucket URL nor audio/songs/{sid}/')
+            else:
+                check_stems(d, where, errors)
         if 'hidden' in song and not isinstance(song['hidden'], bool):
             errors.append(f'{where}: "hidden" must be true or false')
         if 'channels' in song:

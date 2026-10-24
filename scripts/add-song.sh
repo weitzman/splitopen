@@ -9,9 +9,11 @@
 # The band defaults to the item's creator; its channel layout (who plays what)
 # must exist in bands.json under the slugified band name.
 #
-# Steps: download FLAC -> BS-Roformer-SW separation -> encode five Opus stems
-# (piano+other merged into keys) -> add/replace the entry in songs.json.
-# Each step is skipped when its output already exists, so re-running is cheap.
+# Steps: download FLAC -> BS-Roformer-SW separation -> encode five stems as
+# Opus segments (piano+other merged into keys; see scripts/segment-stems.py)
+# -> upload them to the R2 bucket -> add/replace the entry in songs.json.
+# Each step is skipped when its output already exists, so re-running is
+# cheap. The upload needs the rclone remote described in the README.
 #
 # Stems are Opus in an Ogg container (.opus). Safari used to accept Opus only
 # inside CAF, so a 10 s clip was encoded both ways and fed to decodeAudioData
@@ -25,9 +27,10 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 MODEL="BS-Roformer-SW.ckpt"
 BITRATE="128k"
+STEMS_URL="${STEMS_URL:-https://pub-24e1ed6bc198435aa93f9f41227d48b5.r2.dev/songs}"  # where upload-stems.sh puts them, as the player reads them
 
 url="${1:-}"; shift || true
-[[ -n "$url" ]] || { sed -n '2,12p' "$0" | sed 's/^# \{0,1\}//'; exit 1; }
+[[ -n "$url" ]] || { sed -n '2,13p' "$0" | sed 's/^# \{0,1\}//'; exit 1; }
 
 title=""; set_name=""; band=""
 while [[ $# -gt 0 ]]; do
@@ -109,28 +112,28 @@ else
   audio-separator -m "$MODEL" --output_dir "$sep_dir" --output_format WAV "$src"
 fi
 
-# --- 4. encode + register -----------------------------------------------
-encoded=1
-for s in drums bass vocals guitar keys; do [[ -s "$out/$s.opus" ]] || encoded=0; done
-if [[ $encoded == 1 ]]; then
-  echo "[4/4] already encoded: $out"
+# --- 4. encode + upload + register ---------------------------------------
+if [[ -s "$out/meta.json" ]]; then
+  echo "[4/5] already encoded: $out"
 else
-  echo "[4/4] encoding stems"
+  echo "[4/5] encoding stems as segments"
   mkdir -p "$out"
-  for s in drums bass vocals guitar; do
-    ffmpeg -hide_banner -loglevel error -y -i "$(stem $s)" -c:a libopus -b:a "$BITRATE" "$out/$s.opus"
-  done
-  ffmpeg -hide_banner -loglevel error -y -i "$(stem piano)" -i "$(stem other)" \
-    -filter_complex "amix=inputs=2:normalize=0" -c:a libopus -b:a "$BITRATE" "$out/keys.opus"
+  python3 "$ROOT/scripts/segment-stems.py" --out "$out" --bitrate "$BITRATE" \
+    "drums=$(stem drums)" "bass=$(stem bass)" "vocals=$(stem vocals)" "guitar=$(stem guitar)" \
+    "keys=$(stem piano)+$(stem other)"
+  python3 "$ROOT/scripts/seam-test.py" "$out/drums" --ref "$(stem drums)"
 fi
 
-python3 - "$ROOT/songs.json" "$meta" "$id" "$set_name" "https://archive.org/details/$item" <<'PY'
+echo "[5/5] uploading to the bucket"
+"$ROOT/scripts/upload-stems.sh" "$id"
+
+python3 - "$ROOT/songs.json" "$meta" "$id" "$set_name" "https://archive.org/details/$item" "$STEMS_URL/$id/" <<'PY'
 import json, sys
-path, meta, id_, set_name, source = sys.argv[1:]
+path, meta, id_, set_name, source, stems_dir = sys.argv[1:]
 meta = json.loads(meta)
 entry = {'id': id_, 'band': meta['band'], 'title': meta['title'], 'date': meta['date'], 'set': set_name,
          'venue': meta['venue'], 'city': meta['city'], 'source': source,
-         'dir': f'audio/songs/{id_}/'}
+         'dir': stems_dir}
 try:
     songs = json.load(open(path))
 except FileNotFoundError:
