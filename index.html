@@ -70,8 +70,8 @@
       <span class="guide-kicker" id="guide-kicker">Guide</span>
       <span class="guide-title" id="guide-title"></span>
       <button class="btn guide-add" id="guide-add" title="Start a tip here, with the current mix (N)" hidden>Tip: Start</button>
-      <button class="btn guide-edit" id="guide-edit" title="Copy this guide into one of your own and change it">Copy &amp; edit</button>
-      <button class="btn guide-offer" id="guide-offer" title="Offer this guide to the library, as a pull request on GitHub" hidden>Contribute</button>
+      <button class="btn guide-edit" id="guide-edit" title="Go back to writing this guide" hidden>Edit</button>
+      <button class="btn guide-offer" id="guide-offer" title="Offer this guide to the library, by email" hidden>Contribute</button>
       <button class="btn guide-close" id="guide-close" aria-label="Close guide">&times;</button>
     </div>
     <p class="guide-status" id="guide-status" hidden></p>
@@ -96,13 +96,19 @@
     </button>
   </section>
 
+  <section class="tip" id="tip" aria-live="polite">
+    <span class="tip-card">
+      <svg class="tip-icon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6M10 21h4M8.5 14.5A6 6 0 1 1 15.5 14.5c-.7.6-1.2 1.3-1.4 2.2L14 18h-4l-.1-1.3c-.2-.9-.7-1.6-1.4-2.2Z"/></svg>
+      <span class="tip-text" id="tip-text"></span>
+    </span>
+  </section>
+
   <footer class="help">
     <span><kbd>space</kbd> play / pause</span>
     <span><kbd>1</kbd>–<kbd>5</kbd> solo</span>
     <span><kbd>←</kbd> <kbd>→</kbd> ±5 s</span>
     <span><kbd>/</kbd> choose a song</span>
     <span><kbd>L</kbd> share mix</span>
-    <span><kbd>N</kbd> add a tip</span>
     <p class="colophon">Split Open so we can learn and appreciate. By <a href="https://weitzman.github.io">Moshe Weitzman</a>.</p>
   </footer>
 </main>
@@ -129,7 +135,7 @@
 <dialog class="sheet offer-sheet" id="offer-sheet" aria-labelledby="offer-sheet-title">
   <form id="offer-form" method="dialog" novalidate>
     <h2 class="sheet-title" id="offer-sheet-title">Contribute this guide</h2>
-    <p class="offer-intro">Guides in the library appear under the song for everyone. Name yours, then open it as a pull request on GitHub; the author's name and link are shown with the guide.</p>
+    <p class="offer-intro">Guides in the library appear under the song for everyone. Name yours, then email it to the library; the author's name and link are shown with the guide.</p>
     <label class="offer-field">
       <span class="offer-label">Guide title</span>
       <input id="offer-title" type="text" required maxlength="80" autocomplete="off" placeholder="e.g. Solos, or Mike's entrance">
@@ -158,7 +164,7 @@
       <button class="more" id="offer-copy" type="button" title="Copy the guide text, to send another way">Copy text</button>
       <span class="spacer"></span>
       <button class="btn" id="offer-cancel" type="button">Cancel</button>
-      <button class="btn use" id="offer-go" type="submit">Open pull request</button>
+      <button class="btn use" id="offer-go" type="submit" title="Open your mail app with the guide addressed to the library">Email it</button>
     </div>
   </form>
 </dialog>
