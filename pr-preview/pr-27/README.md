@@ -12,7 +12,12 @@ channel with mute, solo, and a fader, playing in sync.
   through `scripts/yaml12.py`, which gives PyYAML the same YAML 1.2 reading:
   `0:30` and `1998-07-26` are strings, `yes` is a word, only `true` and
   `false` are booleans.
-- `audio/songs/<id>/` — five Opus stems per song (128 kbps, Ogg container): guitar, bass, keys, drums, vocals
+- `audio/songs/<id>/` (local only, see Hosting) — the five stems per song
+  (guitar, bass, keys, drums, vocals), each a directory of 10-second Opus
+  segments (128 kbps, Ogg container) plus a `meta.json` with the song's
+  length and the segment grid. The player decodes a few segments ahead of
+  the playhead and keeps decoded audio within a memory budget, so a song
+  starts in under a second
 - A song in `songs.yaml` names its band, whose lineup comes from `bands.yaml`
   (`who` and `inst` per stem: guitar, bass, keys, drums, vocals). A song can
   override any of those for the night, since lineups change: a `channels`
@@ -22,12 +27,17 @@ channel with mute, solo, and a fader, playing in sync.
   song with `hidden: true` stays out of the picker but still plays from a
   direct link.
 - `scripts/add-song.sh` — download a FLAC from archive.org, separate it with
-  BS-Roformer-SW (`audio-separator`), encode the stems, register the song in
-  `songs.yaml`
+  BS-Roformer-SW (`audio-separator`), encode the stems, upload them, register
+  the song in `songs.yaml`
+- `scripts/upload-stems.sh` — sync `audio/songs/` (or one song) to the bucket
+- `scripts/segment-stems.py` — encode five stems (any audio ffmpeg reads) as
+  segments into a song directory; `scripts/seam-test.py` decodes a stem's
+  segments the way the player plays them and checks the joins are seamless
 - `scripts/check-songs.py` — checks `songs.yaml` and `bands.yaml` strictly,
   as the player reads them: every field present and of the right kind, no
-  unknown fields, the band in `bands.yaml`, the date a date, the five stem
-  files in `dir`. A pull request that breaks either fails its "Check data"
+  unknown fields, the band in `bands.yaml`, the date a date, `meta.json` and
+  every segment of the five stems at the song's `dir` URL (a HEAD request
+  each). A pull request that breaks either fails its "Check data"
   workflow, and a merged one fails the deploy.
 - `scripts/social-card.html` — source for `social.png`, the link-preview image.
   Regenerate after editing it with headless Chrome:
@@ -46,7 +56,28 @@ link can reproduce both. The song id comes first; the rest are `&`-separated
 The player keeps the hash current as you mix and the Share button (or `L`)
 copies it with the current position.
 
+## Hosting
+
+The site is static on GitHub Pages; the stems are not in the repo. They
+live in a Cloudflare R2 bucket (`splitopen`, under `songs/<id>/`) served
+at `https://pub-24e1ed6bc198435aa93f9f41227d48b5.r2.dev` (each song's `dir`), with a
+CORS policy that allows any origin to GET and exposes `Content-Length` (the
+loading bar reads it).
+Uploads go through an rclone remote named `r2` with an R2 API token that
+can read and write the bucket:
+
+    rclone config create r2 s3 provider=Cloudflare \
+      access_key_id=… secret_access_key=… \
+      endpoint=https://<account id>.r2.cloudflarestorage.com no_check_bucket=true
+
+`scripts/upload-stems.sh` syncs every song (or one by id) with a year-long
+immutable cache header on segments and an hour on `meta.json`.
+
 ## Guides
+
+The **Guides** row under the song title is shown only with `?guide=1` in
+the query string (before the hash) while the feature settles; a guide in
+the link still opens without it.
 
 A guide is a listening tour of a song: an ordered list of tips, each a
 passage, a mix, and a note. The mix holds for the passage and the band plays
@@ -117,12 +148,12 @@ kind, a missing title or a folder that is not a song id: a pull request with a b
 To offer a guide to the library, press **Contribute** on a guide you wrote
 (or one that reached you by link). A sheet asks for the title, your name,
 an optional link for it and the notes' language, shows the text as it will
-be submitted, and opens GitHub with the file ready at
-`guides/<song id>/<slug>.yaml`. Committing it there proposes the change as a
-pull request (GitHub forks the repo for anyone without push access), and the
-single new file is the whole contribution. **Copy text** is for sending the
-guide some other way. The title, name and link are written into the guide's
-link as well.
+be submitted, and **Email it** opens the mail app with the guide addressed
+to splitopen@cyrve.com, along with the song, the file it would become
+(`guides/<song id>/<slug>.yaml`) and its link; the maintainer adds the file.
+**Copy text** is for sending the guide some other way. The title, name and
+link are written into the guide's link as well. A guide that is not yet in
+the library has an **Edit** button, which goes back to writing it.
 
 A guide travels in the link: `#songid&guide=<slug>` for one in the repo, or
 `guide=z…`, the deflated text, for one written in the player or by hand. To
@@ -148,5 +179,10 @@ preview at `https://weitzman.github.io/splitopen/pr-preview/pr-<number>/`,
 linked from a comment on the PR and removed when it closes. Links to the
 old `/web/` path redirect to the root.
 
-Source recordings come from the [Live Music Archive](https://archive.org/details/etree)
-and are for non-commercial listening only.
+## License
+
+The code and documentation in this repository are released under the
+[MIT License](LICENSE).
+
+The audio stems under `audio/songs/` are not covered by this license. They
+are derived from recordings whose copyright remains with their owners.
