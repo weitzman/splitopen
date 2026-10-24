@@ -7,7 +7,12 @@ channel with mute, solo, and a fader, playing in sync.
 
 - `index.html`, `app.js`, `styles.css`, `songs.json`, `bands.json` — the player
   (static HTML + Web Audio API, no build step), served from the repo root
-- `audio/songs/<id>/` — five Opus stems per song (128 kbps, Ogg container): guitar, bass, keys, drums, vocals
+- `audio/songs/<id>/` (local only, see Hosting) — the five stems per song
+  (guitar, bass, keys, drums, vocals), each a directory of 10-second Opus
+  segments (128 kbps, Ogg container) plus a `meta.json` with the song's
+  length and the segment grid. The player decodes a few segments ahead of
+  the playhead and keeps decoded audio within a memory budget, so a song
+  starts in under a second
 - A song in `songs.json` names its band, whose lineup comes from `bands.json`
   (`who` and `inst` per stem: guitar, bass, keys, drums, vocals). A song can
   override any of those for the night, since lineups change: a `channels`
@@ -17,12 +22,17 @@ channel with mute, solo, and a fader, playing in sync.
   song with `"hidden": true` stays out of the picker but still plays from a
   direct link.
 - `scripts/add-song.sh` — download a FLAC from archive.org, separate it with
-  BS-Roformer-SW (`audio-separator`), encode the stems, register the song in
-  `songs.json`
+  BS-Roformer-SW (`audio-separator`), encode the stems, upload them, register
+  the song in `songs.json`
+- `scripts/upload-stems.sh` — sync `audio/songs/` (or one song) to the bucket
+- `scripts/segment-stems.py` — encode five stems (any audio ffmpeg reads) as
+  segments into a song directory; `scripts/seam-test.py` decodes a stem's
+  segments the way the player plays them and checks the joins are seamless
 - `scripts/check-songs.py` — checks `songs.json` and `bands.json` strictly,
   as the player reads them: every field present and of the right kind, no
-  unknown fields, the band in `bands.json`, the date a date, the five stem
-  files in `dir`. A pull request that breaks either fails its "Check data"
+  unknown fields, the band in `bands.json`, the date a date, `meta.json` and
+  every segment of the five stems at the song's `dir` URL (a HEAD request
+  each). A pull request that breaks either fails its "Check data"
   workflow, and a merged one fails the deploy.
 - `scripts/social-card.html` — source for `social.png`, the link-preview image.
   Regenerate after editing it with headless Chrome:
@@ -40,6 +50,23 @@ link can reproduce both. The song id comes first; the rest are `&`-separated
 
 The player keeps the hash current as you mix and the Share button (or `L`)
 copies it with the current position.
+
+## Hosting
+
+The site is static on GitHub Pages; the stems are not in the repo. They
+live in a Cloudflare R2 bucket (`splitopen`, under `songs/<id>/`) served
+at `https://pub-24e1ed6bc198435aa93f9f41227d48b5.r2.dev` (each song's `dir`), with a
+CORS policy that allows any origin to GET and exposes `Content-Length` (the
+loading bar reads it).
+Uploads go through an rclone remote named `r2` with an R2 API token that
+can read and write the bucket:
+
+    rclone config create r2 s3 provider=Cloudflare \
+      access_key_id=… secret_access_key=… \
+      endpoint=https://<account id>.r2.cloudflarestorage.com no_check_bucket=true
+
+`scripts/upload-stems.sh` syncs every song (or one by id) with a year-long
+immutable cache header on segments and an hour on `meta.json`.
 
 ## Guides
 
