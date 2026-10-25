@@ -16,7 +16,7 @@ widespread-panic:
     guitar: {who: JB & Mikey, inst: Guitars}
     bass: {who: Schools, inst: Bass}
     keys: {who: JoJo, inst: Keys}
-    drums: {who: Todd & Sunny, inst: Drums & Perc}
+    drums: {who: Todd & Sunny, inst: Drums/Perc}
     vocals: {who: Vocals, inst: Larynx}
 
 goose:
@@ -34,7 +34,7 @@ goose:
 billy-strings:
   name: Billy Strings
   channels:
-    guitar: {who: Billy & the band, inst: "Guitar, Banjo & Mando"}
+    guitar: {who: Billy & the band, inst: Guitar/Banjo/Mando}
     bass: {who: Royal, inst: Bass}
     vocals: {who: Vocals, inst: Larynx}
 
@@ -52,4 +52,4 @@ tedeschi-trucks-band:
     keys: {who: Kofi, inst: Keys}
     drums: {who: Tyler & JJ, inst: Drums}
     vocals: {who: Vocals, inst: Larynx}
-    horns: {who: Horns, inst: "Sax, Trumpet & Bone"}
+    horns: {who: Horns, inst: Sax/Trumpet/Bone}
