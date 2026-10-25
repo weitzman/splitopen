@@ -838,6 +838,18 @@ li.looping .icon.loop { background: var(--gold); border-color: var(--gold); colo
 }
 .tip-icon { width: 20px; height: 20px; flex: none; color: var(--gold); }
 .tip em { font-style: normal; font-weight: 600; color: var(--gold); }
+.tip-link {
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  font-weight: 600;
+  color: var(--gold);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.tip-link:hover { color: var(--text); }
 /* On phones the transport is fixed to the bottom, so the tip floats just
    above it instead of sitting in the flow underneath. */
 @media (max-width: 720px) {
@@ -847,8 +859,9 @@ li.looping .icon.loop { background: var(--gold); border-color: var(--gold); colo
     right: 16px;
     bottom: 102px; /* the transport is 78px tall, 12px up from the bottom */
     z-index: 2;
-    pointer-events: none;
+    pointer-events: none; /* taps fall through to the page, except on a showing tip */
   }
+  .tip.on .tip-card { pointer-events: auto; }
   .tip-card { font-size: 14px; }
 }
 
