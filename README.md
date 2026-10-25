@@ -12,16 +12,17 @@ channel with mute, solo, and a fader, playing in sync.
   through `scripts/yaml12.py`, which gives PyYAML the same YAML 1.2 reading:
   `0:30` and `1998-07-26` are strings, `yes` is a word, only `true` and
   `false` are booleans.
-- `audio/songs/<id>/` (local only, see Hosting) — the five stems per song
-  (guitar, bass, keys, drums, vocals), each a directory of 10-second Opus
+- `audio/songs/<id>/` (local only, see Hosting) — the song's stems (any of
+  guitar, bass, keys, drums, vocals, horns, flute), each a directory of 10-second Opus
   segments (128 kbps, Ogg container) plus a `meta.json` with the song's
   length and the segment grid. The player decodes a few segments ahead of
   the playhead and keeps decoded audio within a memory budget, so a song
   starts in under a second
 - A song in `songs.yaml` names its band, whose lineup comes from `bands.yaml`
-  (`who` and `inst` per stem: guitar, bass, keys, drums, vocals). A band
-  lists only the stems it has; a string band with no keys or drums leaves
-  them out, and the player neither shows nor fetches them. A song can
+  (`who` and `inst` per stem: guitar, bass, keys, drums, vocals, horns,
+  flute). A band lists only the stems it has; a string band with no keys or
+  drums leaves them out, a band with a horn section adds `horns`, and the
+  player shows and fetches just those. A song can
   override any of those for the night, since lineups change: a `channels`
   map on the song with the stems to change, e.g.
   `channels: {keys: {who: Page & Medeski}, guitar: {inst: Guitars}}`. A
@@ -33,9 +34,13 @@ channel with mute, solo, and a fader, playing in sync.
   BS-Roformer-SW (`audio-separator`), encode the stems, upload them, register
   the song in `songs.yaml`
 - `scripts/upload-stems.sh` — sync `audio/songs/` (or one song) to the bucket
-- `scripts/segment-stems.py` — encode five stems (any audio ffmpeg reads) as
+- `scripts/segment-stems.py` — encode a song's stems (any audio ffmpeg reads) as
   segments into a song directory; `scripts/seam-test.py` decodes a stem's
   segments the way the player plays them and checks the joins are seamless
+- `scripts/split-other.py` — divide BS-Roformer-SW's `other` stem, which
+  holds every wind instrument and (for some bands) the organ, between
+  `horns`, `keys` and `flute`, guided by the stems of ZFTurbo's 53-stem MVSep
+  Mega model (see the script for how to run it)
 - `scripts/check-songs.py` — checks `songs.yaml` and `bands.yaml` strictly,
   as the player reads them: every field present and of the right kind, no
   unknown fields, the band in `bands.yaml`, the date a date, `meta.json` and
@@ -52,7 +57,7 @@ link can reproduce both. The song id comes first; the rest are `&`-separated
 
     #1998-07-26-funky-bitch&solo=keys&mute=vocals&g=guitar:0.8,bass:1.2&t=312
 
-- `solo`, `mute` — comma-separated stem ids: `guitar`, `bass`, `keys`, `drums`, `vocals`
+- `solo`, `mute` — comma-separated stem ids: `guitar`, `bass`, `keys`, `drums`, `vocals`, `horns`, `flute`
 - `g` — fader gains as `stem:value` pairs, 0 to 1.5 (1 is unity)
 - `t` — position in seconds; the player seeks there but waits for Play
 

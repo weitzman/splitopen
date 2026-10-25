@@ -4,6 +4,9 @@
     scripts/segment-stems.py --out audio/songs/<id> \\
         guitar=G.wav bass=B.wav keys=P.wav+O.wav drums=D.wav vocals=V.wav
 
+Only the stems given are encoded (the song's band lists which ones it has;
+see bands.yaml); any of guitar, bass, keys, drums, vocals, horns, flute.
+
 Each stem goes to <out>/<stem>/NNN.opus, where segment N holds seconds
 [N*10, (N+1)*10) of the stem. Every segment after the first also carries a
 0.1 s lead-in before that span, and every segment a 0.02 s tail after it,
@@ -32,7 +35,7 @@ import sys
 import tempfile
 from concurrent.futures import ThreadPoolExecutor
 
-STEMS = ['guitar', 'bass', 'keys', 'drums', 'vocals']
+STEMS = ['guitar', 'bass', 'keys', 'drums', 'vocals', 'horns', 'flute']
 RATE = 48000
 
 
@@ -86,9 +89,7 @@ def main():
         for f in inputs[stem]:
             if not os.path.isfile(f):
                 sys.exit(f'{stem}: no such file {f}')
-    missing = [s for s in STEMS if s not in inputs]
-    if missing:
-        sys.exit(f'missing stems: {", ".join(missing)}')
+    stems = [s for s in STEMS if s in inputs]
 
     seg = round(args.segment * RATE)
     lead = round(args.lead * RATE)
@@ -96,7 +97,7 @@ def main():
     tmp = tempfile.mkdtemp(prefix='segment-stems-')
     try:
         wavs = {}
-        for stem in STEMS:
+        for stem in stems:
             wavs[stem] = os.path.join(tmp, stem + '.wav')
             print(f'resampling {stem}', flush=True)
             to_wav48(inputs[stem], wavs[stem])
@@ -105,7 +106,7 @@ def main():
         print(f'{n / RATE:.3f} s -> {count} segments of {args.segment:g} s per stem', flush=True)
 
         jobs = []
-        for stem in STEMS:
+        for stem in stems:
             d = os.path.join(args.out, stem)
             shutil.rmtree(d, ignore_errors=True)
             os.makedirs(d)

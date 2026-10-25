@@ -36,3 +36,18 @@ billy-strings:
     guitar: {who: Billy & the band, inst: "Guitar, Banjo & Mando"}
     bass: {who: Royal, inst: Bass}
     vocals: {who: Vocals, inst: Larynx}
+
+# The December 2015 lineup: Tyler and J.J. on two drum kits and a three-piece
+# horn section. BS-Roformer-SW puts the horns and Kofi Burbridge's organ
+# together in its "other" stem (piano gets its own); scripts/split-other.py
+# divides it into horns and keys. When Kofi plays flute in a song, that song
+# adds `flute: {who: Kofi, inst: Flute}` and splits the flute out the same way.
+tedeschi-trucks-band:
+  name: Tedeschi Trucks Band
+  channels:
+    guitar: {who: Derek & Susan, inst: Guitars}
+    bass: {who: Tim, inst: Bass}
+    keys: {who: Kofi, inst: Keys}
+    drums: {who: Tyler & JJ, inst: Drums}
+    vocals: {who: Vocals, inst: Larynx}
+    horns: {who: Horns, inst: "Sax, Trumpet & Bone"}
