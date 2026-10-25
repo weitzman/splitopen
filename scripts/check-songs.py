@@ -162,9 +162,10 @@ def check_bands(bands, errors):
             errors.append(f'{where}: must be a map with "name" and "channels"')
             continue
         for key in band:
-            if key not in ('name', 'channels'):
+            if key not in ('name', 'short_name', 'channels'):
                 errors.append(f'{where}: unknown field "{key}"')
         text(band, 'name', where, errors)
+        text(band, 'short_name', where, errors, required=False)
         if 'channels' in band:
             check_channels(band['channels'], where, errors, complete=True)
         else:

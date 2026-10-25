@@ -2161,7 +2161,7 @@ async function shareLink() {
 
 function renderHeader() {
   document.getElementById('title').textContent = song.title;
-  document.getElementById('venue').textContent = `${song.date} · ${song.venue} · ${song.city}`;
+  document.getElementById('venue').textContent = `${song.date} · ${band.short_name || band.name} · ${song.venue} · ${song.city}`;
   document.title = `Split Open — ${song.title}`;
   renderGuideChips();
   for (const row of document.querySelectorAll('.song-row')) {

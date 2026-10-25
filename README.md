@@ -21,7 +21,9 @@ channel with mute, solo, and a fader, playing in sync.
 - A song in `songs.yaml` names its band, whose lineup comes from `bands.yaml`
   (`who` and `inst` per stem: guitar, bass, keys, drums, vocals). A band
   lists only the stems it has; a string band with no keys or drums leaves
-  them out, and the player neither shows nor fetches them. A song can
+  them out, and the player neither shows nor fetches them. The line under
+  the song title reads date, band, venue, city; a band with a `short_name`
+  (`TTB`) shows that there instead of its `name`. A song can
   override any of those for the night, since lineups change: a `channels`
   map on the song with the stems to change, e.g.
   `channels: {keys: {who: Page & Medeski}, guitar: {inst: Guitars}}`. A

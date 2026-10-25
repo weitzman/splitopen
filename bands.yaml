@@ -1,5 +1,6 @@
 # Who plays which stem for each band. A song in songs.yaml names its band by
-# the key here; see README.md for the fields.
+# the key here; see README.md for the fields. An optional short_name stands
+# in for the name where space is tight (the venue line under the title).
 phish:
   name: Phish
   channels:
@@ -35,4 +36,14 @@ billy-strings:
   channels:
     guitar: {who: Billy & the band, inst: "Guitar, Banjo & Mando"}
     bass: {who: Royal, inst: Bass}
+    vocals: {who: Vocals, inst: Larynx}
+
+tedeschi-trucks-band:
+  name: Tedeschi Trucks Band
+  short_name: TTB
+  channels:
+    guitar: {who: Derek & Susan, inst: Guitars}
+    bass: {who: Tim, inst: Bass}
+    keys: {who: Kofi, inst: Keys}
+    drums: {who: Tyler & JJ, inst: Drums}
     vocals: {who: Vocals, inst: Larynx}
