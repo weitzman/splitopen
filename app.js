@@ -19,8 +19,22 @@ let STEMS = SLOTS;
 // The stems are Opus, which always decodes at 48 kHz. Matching the context
 // rate avoids resampling every stem on decode, which is roughly 3x slower
 // than decoding alone.
+//
+// The latency hint sets the device buffer, and so how late the renderer may
+// run before the output drops out. The default (interactive) buffer is
+// 5 ms in Chrome on macOS, which a busy machine misses often enough to
+// crackle; 50 ms rides out those stalls, and nothing here needs a quicker
+// response than that: the faders only shape playback, there is no live
+// input. Each browser rounds the hint to a buffer size it supports.
 const STEM_RATE = 48000;
-const ctx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: STEM_RATE });
+const ctx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: STEM_RATE, latencyHint: 0.05 });
+
+// The renderer works a device buffer at a time, so a start less than a
+// buffer ahead of the clock can already be behind the renderer by the time
+// the call reaches it, and the source starts late and off its grid. Every
+// start is scheduled at least this far ahead, on top of the few ms the
+// main thread itself takes.
+const CLOCK_MARGIN = ctx.baseLatency || 0;
 const master = ctx.createGain();
 master.connect(ctx.destination);
 
@@ -594,8 +608,8 @@ function tipsSongChanged() {
 
 // ---------- transport ----------
 
-// Sources start 50 ms after play(), so for that moment the clock reads a
-// little behind the start offset; clamp so the position never steps back.
+// Sources start a little after play(), so for that moment the clock reads
+// behind the start offset; clamp so the position never steps back.
 function position() {
   return playing ? Math.max(offset, Math.min(duration, offset + ctx.currentTime - startedAt)) : offset;
 }
@@ -613,7 +627,7 @@ function scheduleSegment(k, buffers) {
   const segEnd = Math.min(duration, segStart + meta.segment);
   let from = Math.max(segStart, offset);
   let when = clockAt(from);
-  const now = ctx.currentTime + 0.02;
+  const now = ctx.currentTime + 0.02 + CLOCK_MARGIN;
   if (when < now) { from += now - when; when = now; } // scheduled late (a throttled timer): join in where the clock is
   if (from >= segEnd) return;
   const until = clockAt(segEnd);
@@ -674,7 +688,7 @@ function rebuffer(k) {
 // they share; on the grid the join is sample-exact.
 function startSources(from) {
   const rate = ctx.sampleRate;
-  startedAt = Math.ceil((ctx.currentTime + 0.05) * rate) / rate;
+  startedAt = Math.ceil((ctx.currentTime + 0.05 + CLOCK_MARGIN) * rate) / rate;
   offset = Math.round(from * rate) / rate;
   playing = true;
   pump();
