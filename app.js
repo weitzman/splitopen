@@ -513,17 +513,20 @@ function updateHints() {
 // the transport: Play, a few seconds after the first song is ready; Solo, a
 // few seconds into playback (skipped if they have ever used solo or mute,
 // remembered in localStorage like the S-button glow, or a link or guide set
-// the mix); and the song picker half a minute after that. Pressing Play retires the first tip, pressing S or M the second, and
-// changing songs ends the tour early, since they've found everything.
+// the mix); and the song picker half a minute after that, which opens it
+// when clicked and fades out on its own after ten seconds. Pressing Play
+// retires the first tip, pressing S or M the second, and changing songs
+// ends the tour early, since they've found everything.
 
 const TIP_LOAD_DELAY = 3000;   // song ready -> Play tip
 const TIP_PLAY_DELAY = 4000;   // playing -> Solo tip
 const TIP_SONGS_DELAY = 30000; // Solo tip -> songs tip
+const TIP_SONGS_LINGER = 10000; // songs tip -> gone
 const TIP_FADE = 600;          // matches the CSS transition
 const TIPS = {
   play: 'Press <em>Play</em>, and soak in sound',
   solo: 'Click <em>Solo</em>, and smile',
-  songs: 'Change songs, as you wish',
+  songs: '<button type="button" class="tip-link">Change songs</button>, as you wish',
 };
 let tipStage = 'load'; // load -> play -> solo -> songs -> done
 let tipTimer = null;
@@ -576,7 +579,20 @@ function tipsSolo() {
   tipTimer = setTimeout(() => {
     tipStage = 'done';
     showTip('songs');
+    tipTimer = setTimeout(() => showTip(null), TIP_SONGS_LINGER);
   }, TIP_SONGS_DELAY);
+}
+
+// The songs tip is a link to the picker.
+function wireTips() {
+  ui.tip = document.getElementById('tip');
+  ui.tipText = document.getElementById('tip-text');
+  ui.tipText.addEventListener('click', e => {
+    if (!e.target.closest('.tip-link')) return;
+    clearTimeout(tipTimer);
+    showTip(null);
+    openSongPicker();
+  });
 }
 
 // S or M was pressed: the Solo tip has done its job.
@@ -2063,8 +2079,6 @@ function wireTransport() {
   ui.cur = document.getElementById('time-cur');
   ui.dur = document.getElementById('time-dur');
   ui.share = document.getElementById('share');
-  ui.tip = document.getElementById('tip');
-  ui.tipText = document.getElementById('tip-text');
 
   ui.play.addEventListener('click', () => playing ? pause() : play());
   ui.share.addEventListener('click', shareLink);
@@ -2318,6 +2332,7 @@ async function loadSong(state) {
 
 (async () => {
   wireTransport();
+  wireTips();
   wireGuide();
   wireMixSheet();
   wireOfferSheet();
