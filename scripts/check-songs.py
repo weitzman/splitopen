@@ -29,7 +29,7 @@ import yaml12
 
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
 SLUG = re.compile(r'^[\w-]+$')
-STEMS = ['guitar', 'bass', 'keys', 'drums', 'vocals']
+STEMS = ['guitar', 'bass', 'keys', 'drums', 'vocals', 'horns', 'flute']
 META_FIELDS = ['duration', 'segment', 'lead', 'segments']
 URL = re.compile(r'^https?://\S+$')
 

@@ -6,13 +6,16 @@
 // changes. Playback begins as soon as the segment under the playhead is
 // decoded for every stem; decoded audio is kept within a memory budget.
 
-// Fixed stem slots; who plays each one comes from bands.yaml per song.
+// Fixed stem slots, in strip order; a band lists the ones it has (see
+// stemsFor) and who plays each comes from bands.yaml per song.
 const SLOTS = [
   { id: 'guitar', color: 'var(--trey)' },
   { id: 'bass',   color: 'var(--mike)' },
   { id: 'keys',   color: 'var(--page)' },
   { id: 'drums',  color: 'var(--fish)' },
   { id: 'vocals', color: 'var(--vox)' },
+  { id: 'horns',  color: 'var(--horns)' },
+  { id: 'flute',  color: 'var(--flute)' },
 ];
 let STEMS = SLOTS;
 
@@ -2299,6 +2302,7 @@ async function loadSong(state) {
   const loading = document.getElementById('loading');
   mixer.innerHTML = '';
   mixer.style.setProperty('--stems', STEMS.length);
+  document.getElementById('help-solo-max').textContent = STEMS.length;
   mixer.hidden = true;
   document.getElementById('transport').hidden = true;
   loading.hidden = false;

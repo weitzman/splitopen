@@ -50,3 +50,13 @@
   source: https://archive.org/details/billystrings2017-08-29.gondos.sbd.flac16
   dir: https://pub-24e1ed6bc198435aa93f9f41227d48b5.r2.dev/songs/2017-08-29-meet-me-at-the-creek/
   hidden: true  # the string band comes out as one stem; see bands.yaml
+
+- id: 2015-12-03-midnight-in-harlem
+  band: tedeschi-trucks-band
+  title: Midnight in Harlem
+  date: 2015-12-03
+  set: Set II
+  venue: Capitol Theatre
+  city: Port Chester, NY
+  source: https://archive.org/details/ttb2015-12-03
+  dir: https://pub-24e1ed6bc198435aa93f9f41227d48b5.r2.dev/songs/2015-12-03-midnight-in-harlem/

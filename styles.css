@@ -12,6 +12,8 @@
   --page: #a66cff;
   --fish: #d7263d;
   --vox: #f2b134;
+  --horns: #4cc9f0;
+  --flute: #c3f06b;
 }
 
 * { box-sizing: border-box; }
@@ -167,6 +169,9 @@ h1 {
   grid-template-columns: repeat(var(--stems, 5), minmax(0, 1fr)); /* --stems set per song */
   gap: 12px;
 }
+/* Seven strips (a band with horns and flute) share the same width, so each
+   is about 138px; the names stay on one line by wrapping as needed. */
+.strip .who { text-align: center; }
 
 .strip {
   --c: var(--gold);
