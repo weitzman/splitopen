@@ -40,3 +40,13 @@
   city: Philadelphia, PA
   source: https://www.youtube.com/watch?v=Qg6W8F10RrY&t=8566s
   dir: https://pub-24e1ed6bc198435aa93f9f41227d48b5.r2.dev/songs/2025-10-04-thatch/
+
+- id: 2017-08-29-meet-me-at-the-creek
+  band: billy-strings
+  title: Meet Me at the Creek
+  date: 2017-08-29
+  venue: The Saint
+  city: Asbury Park, NJ
+  source: https://archive.org/details/billystrings2017-08-29.gondos.sbd.flac16
+  dir: https://pub-24e1ed6bc198435aa93f9f41227d48b5.r2.dev/songs/2017-08-29-meet-me-at-the-creek/
+  hidden: true  # the string band comes out as one stem; see bands.yaml

@@ -164,7 +164,7 @@ h1 {
 .mixer[hidden] { display: none; }
 .mixer {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(var(--stems, 5), minmax(0, 1fr)); /* --stems set per song */
   gap: 12px;
 }
 
