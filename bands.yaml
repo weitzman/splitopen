@@ -38,10 +38,10 @@ billy-strings:
     vocals: {who: Vocals, inst: Larynx}
 
 # The December 2015 lineup: Tyler and J.J. on two drum kits and a three-piece
-# horn section. BS-Roformer-SW puts every wind instrument into one stem, which
-# is the horns channel; when Kofi Burbridge plays flute in a song, that song
-# adds `flute: {who: Kofi, inst: Flute}` after scripts/wind-stems.py splits
-# it out of the same stem.
+# horn section. BS-Roformer-SW puts the horns and Kofi Burbridge's organ
+# together in its "other" stem (piano gets its own); scripts/split-other.py
+# divides it into horns and keys. When Kofi plays flute in a song, that song
+# adds `flute: {who: Kofi, inst: Flute}` and splits the flute out the same way.
 tedeschi-trucks-band:
   name: Tedeschi Trucks Band
   channels:

@@ -37,9 +37,10 @@ channel with mute, solo, and a fader, playing in sync.
 - `scripts/segment-stems.py` — encode a song's stems (any audio ffmpeg reads) as
   segments into a song directory; `scripts/seam-test.py` decodes a stem's
   segments the way the player plays them and checks the joins are seamless
-- `scripts/wind-stems.py` — split BS-Roformer-SW's `other` stem, which holds
-  every wind instrument, into `horns` and `flute` using the flute stem of
-  ZFTurbo's 53-stem MVSep Mega model (see the script for how to run it)
+- `scripts/split-other.py` — divide BS-Roformer-SW's `other` stem, which
+  holds every wind instrument and (for some bands) the organ, between
+  `horns`, `keys` and `flute`, guided by the stems of ZFTurbo's 53-stem MVSep
+  Mega model (see the script for how to run it)
 - `scripts/check-songs.py` — checks `songs.yaml` and `bands.yaml` strictly,
   as the player reads them: every field present and of the right kind, no
   unknown fields, the band in `bands.yaml`, the date a date, `meta.json` and
