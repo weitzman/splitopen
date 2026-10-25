@@ -94,8 +94,8 @@ def present(d, name):
     return False
 
 
-def check_stems(d, where, errors):
-    """meta.json and every segment it promises, for each stem."""
+def check_stems(d, where, errors, stems):
+    """meta.json and every segment it promises, for each of the song's stems."""
     try:
         meta = read_meta(d)
     except OSError as e:
@@ -118,19 +118,22 @@ def check_stems(d, where, errors):
     if not isinstance(meta['segments'], int) or meta['segments'] != math.ceil(meta['duration'] / meta['segment']):
         errors.append(f'{where}: {d}meta.json: "segments" should be {math.ceil(meta["duration"] / meta["segment"])} '
                       f'for {meta["duration"]} s in {meta["segment"]} s segments')
-    names = [f'{stem}/{k:03d}.opus' for stem in STEMS for k in range(meta['segments'])]
+    names = [f'{stem}/{k:03d}.opus' for stem in stems for k in range(meta['segments'])]
     with ThreadPoolExecutor(max_workers=8) as pool:
         for name, ok in zip(names, pool.map(lambda n: present(d, n), names)):
             if not ok:
                 errors.append(f'{where}: missing or empty segment {d}{name}')
 
 
-def check_channels(channels, where, errors, complete):
-    """A map of stem id to {who, inst}. A band's lists every stem with
-    both; a song's lists only what it overrides."""
+def check_channels(channels, where, errors, complete, band_channels=()):
+    """A map of stem id to {who, inst}. A band's lists the stems it has, each
+    with both; a song's lists only what it overrides, or adds for the night
+    (a stem its band lacks, which then needs both)."""
     if not isinstance(channels, dict):
         errors.append(f'{where}: "channels" must be a map keyed by stem')
         return
+    if complete and not channels:
+        errors.append(f'{where}: "channels" lists no stems')
     for stem, ch in channels.items():
         here = f'{where} channels.{stem}'
         if stem not in STEMS:
@@ -143,17 +146,14 @@ def check_channels(channels, where, errors, complete):
             if key not in ('who', 'inst'):
                 errors.append(f'{here}: unknown field "{key}"')
         for key in ('who', 'inst'):
-            text(ch, key, here, errors, required=complete)
-    if complete:
-        for stem in STEMS:
-            if stem not in channels:
-                errors.append(f'{where}: no channel for "{stem}"')
+            text(ch, key, here, errors, required=complete or stem not in band_channels)
 
 
 def check_bands(bands, errors):
+    """Returns each band's channels map by slug."""
     if not isinstance(bands, dict):
         errors.append('bands.yaml: must be a map keyed by band slug')
-        return set()
+        return {}
     for slug, band in bands.items():
         where = f'bands.yaml {slug}'
         if not SLUG.match(slug):
@@ -169,7 +169,7 @@ def check_bands(bands, errors):
             check_channels(band['channels'], where, errors, complete=True)
         else:
             errors.append(f'{where}: no "channels"')
-    return set(bands)
+    return {slug: band.get('channels', {}) if isinstance(band, dict) else {} for slug, band in bands.items()}
 
 
 def check_songs(songs, band_ids, errors):
@@ -200,6 +200,11 @@ def check_songs(songs, band_ids, errors):
         band = text(song, 'band', where, errors)
         if band and band not in band_ids:
             errors.append(f'{where}: band "{band}" is not in bands.yaml')
+        band_channels = band_ids.get(band) or {}
+        if not isinstance(band_channels, dict):
+            band_channels = {}
+        own = song.get('channels') if isinstance(song.get('channels'), dict) else {}
+        stems = [s for s in STEMS if s in band_channels or s in own]  # the stems the player will fetch
         date = text(song, 'date', where, errors)
         if date:
             try:
@@ -218,11 +223,11 @@ def check_songs(songs, band_ids, errors):
             elif not (URL.match(d) or d.startswith('audio/songs/')):
                 errors.append(f'{where}: dir "{d}" is neither a bucket URL nor audio/songs/{sid}/')
             else:
-                check_stems(d, where, errors)
+                check_stems(d, where, errors, stems)
         if 'hidden' in song and not isinstance(song['hidden'], bool):
             errors.append(f'{where}: "hidden" must be true or false')
         if 'channels' in song:
-            check_channels(song['channels'], where, errors, complete=False)
+            check_channels(song['channels'], where, errors, complete=False, band_channels=band_channels)
     if not any(isinstance(s, dict) and not s.get('hidden') for s in songs):
         errors.append('songs.yaml: every song is hidden; the picker would be empty')
 
@@ -231,7 +236,7 @@ if __name__ == '__main__':
     errors = []
     bands = load('bands.yaml', errors)
     songs = load('songs.yaml', errors)
-    band_ids = check_bands(bands, errors) if bands is not None else set()
+    band_ids = check_bands(bands, errors) if bands is not None else {}
     if songs is not None:
         check_songs(songs, band_ids, errors)
     if errors:

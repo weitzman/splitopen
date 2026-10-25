@@ -19,10 +19,13 @@ channel with mute, solo, and a fader, playing in sync.
   the playhead and keeps decoded audio within a memory budget, so a song
   starts in under a second
 - A song in `songs.yaml` names its band, whose lineup comes from `bands.yaml`
-  (`who` and `inst` per stem: guitar, bass, keys, drums, vocals). A song can
+  (`who` and `inst` per stem: guitar, bass, keys, drums, vocals). A band
+  lists only the stems it has; a string band with no keys or drums leaves
+  them out, and the player neither shows nor fetches them. A song can
   override any of those for the night, since lineups change: a `channels`
   map on the song with the stems to change, e.g.
-  `channels: {keys: {who: Page & Medeski}, guitar: {inst: Guitars}}`.
+  `channels: {keys: {who: Page & Medeski}, guitar: {inst: Guitars}}`. A
+  stem the band lacks can be added the same way, with both `who` and `inst`.
   Its `source` is the archive.org item page the recording came from. A
   song with `hidden: true` stays out of the picker but still plays from a
   direct link.
@@ -36,7 +39,7 @@ channel with mute, solo, and a fader, playing in sync.
 - `scripts/check-songs.py` — checks `songs.yaml` and `bands.yaml` strictly,
   as the player reads them: every field present and of the right kind, no
   unknown fields, the band in `bands.yaml`, the date a date, `meta.json` and
-  every segment of the five stems at the song's `dir` URL (a HEAD request
+  every segment of the song's stems at the song's `dir` URL (a HEAD request
   each). A pull request that breaks either fails its "Check data"
   workflow, and a merged one fails the deploy.
 - `scripts/social-card.html` — source for `social.png`, the link-preview image.

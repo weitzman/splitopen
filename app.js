@@ -272,7 +272,7 @@ async function warmOtherSongs(current) {
     if (token !== warmToken) return;
     try {
       await fetchMeta(s);
-      await Promise.all(STEMS.map(st => {
+      await Promise.all(stemsFor(s).map(st => {
         const url = s.dir + st.id + '/' + segName(0);
         if (prefetched.has(url)) return null;
         const p = fetchBytes(url, { priority: 'low' });
@@ -2252,6 +2252,19 @@ function wireSongPicker() {
 
 // ---------- song switching ----------
 
+// The stems a song has, in slot order: the ones its band lists, plus any the
+// song adds for the night. A band without keys or drums lists neither, and
+// the player neither shows nor fetches them. A song's entries override the
+// band's (a guest sitting in on one stem).
+function stemsFor(song, band = bands[song.band] || bands.phish || { channels: {} }) {
+  const own = song.channels || {};
+  return SLOTS.filter(slot => band.channels[slot.id] || own[slot.id]).map(slot => ({
+    ...slot, who: slot.id, inst: '',
+    ...(band.channels[slot.id] || {}),
+    ...(own[slot.id] || {}),
+  }));
+}
+
 async function loadSong(state) {
   const next = findSong(state.id);
   if (song && next.id === song.id) return;
@@ -2263,12 +2276,7 @@ async function loadSong(state) {
   hashPos = null;
   song = next;
   band = bands[song.band] || bands.phish || { name: song.band, channels: {} };
-  // Band layout, then per-song overrides (e.g. a guest sitting in on one stem).
-  STEMS = SLOTS.map(slot => ({
-    ...slot, who: slot.id, inst: '',
-    ...(band.channels[slot.id] || {}),
-    ...((song.channels || {})[slot.id] || {}),
-  }));
+  STEMS = stemsFor(song, band);
   renderHeader();
   loadRepoGuideMeta();
   setPlayButton(false);
@@ -2276,6 +2284,7 @@ async function loadSong(state) {
   const mixer = document.getElementById('mixer');
   const loading = document.getElementById('loading');
   mixer.innerHTML = '';
+  mixer.style.setProperty('--stems', STEMS.length);
   mixer.hidden = true;
   document.getElementById('transport').hidden = true;
   loading.hidden = false;

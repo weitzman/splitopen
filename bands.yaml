@@ -26,3 +26,13 @@ goose:
     keys: {who: Peter, inst: Keys}
     drums: {who: Cotter, inst: Drums}
     vocals: {who: Vocals, inst: Larynx}
+
+# A string band has no keys or drums, so neither is listed and the player
+# leaves them out. BS-Roformer-SW puts guitar, banjo and mandolin together
+# in the guitar stem, so that channel is the whole band.
+billy-strings:
+  name: Billy Strings
+  channels:
+    guitar: {who: Billy & the band, inst: "Guitar, Banjo & Mando"}
+    bass: {who: Royal, inst: Bass}
+    vocals: {who: Vocals, inst: Larynx}
