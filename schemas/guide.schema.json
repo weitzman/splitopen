@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://weitzman.github.io/splitopen/schemas/guide.schema.json",
+  "$id": "https://www.splitopen.fm/schemas/guide.schema.json",
   "title": "Split Open listening guide",
   "description": "A guide, guides/<song id>/<slug>.yaml: a listening tour of a song as an ordered list of tips, each a passage, a mix and a note. See the Guides section of README.md. Beyond this schema, scripts/guides-index.py checks that a tip's end is after its start and that no player is both soloed and muted.",
   "type": "object",

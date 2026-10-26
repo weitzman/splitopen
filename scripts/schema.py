@@ -2,7 +2,7 @@
 
 The schemas describe the shape of songs.yaml, bands.yaml and a guide file:
 which fields there are, which are required, what kind each is. They are
-published with the site (https://weitzman.github.io/splitopen/schemas/) so
+published with the site (https://www.splitopen.fm/schemas/) so
 an editor can check a file as it is typed, and the check scripts apply the
 same rules, keeping only what a schema cannot say (a band that exists, a
 segment that is there) in code.

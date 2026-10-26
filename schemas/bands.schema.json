@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://weitzman.github.io/splitopen/schemas/bands.schema.json",
+  "$id": "https://www.splitopen.fm/schemas/bands.schema.json",
   "title": "Split Open bands",
   "description": "bands.yaml: who plays which stem for each band, keyed by the band slug a song names in songs.yaml. See README.md.",
   "type": "object",
