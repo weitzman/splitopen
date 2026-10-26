@@ -30,16 +30,51 @@ let STEMS = SLOTS;
 // response than that: the faders only shape playback, there is no live
 // input. Each browser rounds the hint to a buffer size it supports.
 const STEM_RATE = 48000;
-const ctx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: STEM_RATE, latencyHint: 0.05 });
+
+// The context is created inside the first gesture on the page rather than
+// at load: a context created before any gesture starts suspended and the
+// browser warns about it in the console. Until then the stems decode on an
+// offline context, which the autoplay policy does not cover, and the per-stem
+// gain nodes wait (see attachChannel).
+let ctx = null;
+let master = null;
 
 // The renderer works a device buffer at a time, so a start less than a
 // buffer ahead of the clock can already be behind the renderer by the time
 // the call reaches it, and the source starts late and off its grid. Every
 // start is scheduled at least this far ahead, on top of the few ms the
 // main thread itself takes.
-const CLOCK_MARGIN = ctx.baseLatency || 0;
-const master = ctx.createGain();
-master.connect(ctx.destination);
+let CLOCK_MARGIN = 0;
+
+function audioContext() {
+  if (ctx) return ctx;
+  ctx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: STEM_RATE, latencyHint: 0.05 });
+  CLOCK_MARGIN = ctx.baseLatency || 0;
+  master = ctx.createGain();
+  master.connect(ctx.destination);
+  for (const c of channels) attachChannel(c);
+  return ctx;
+}
+
+// Any gesture counts, not only Play, so the context is usually running by
+// the time Play is pressed.
+{
+  const types = ['pointerdown', 'keydown', 'touchend'];
+  const onGesture = () => {
+    for (const t of types) window.removeEventListener(t, onGesture, true);
+    audioContext();
+  };
+  for (const t of types) window.addEventListener(t, onGesture, true);
+}
+
+// Decodes ahead of the first gesture happen here. Same rate as the context,
+// so the buffers play back without resampling either way.
+let decoder = null;
+function decodeContext() {
+  if (ctx) return ctx;
+  if (!decoder) decoder = new (window.OfflineAudioContext || window.webkitOfflineAudioContext)(1, 1, STEM_RATE);
+  return decoder;
+}
 
 // iOS Safari gives a tab on the order of 1 GB before killing it, and doesn't
 // report deviceMemory. Treat touch devices that don't report memory as
@@ -206,7 +241,7 @@ function decodeSegment(k, opts) {
   d.promise = (async () => {
     const bufs = await segBytes(k, opts);
     // decodeAudioData detaches its input, so decode a copy and keep the bytes.
-    const result = await Promise.all(bufs.map(b => ctx.decodeAudioData(b.slice(0))));
+    const result = await Promise.all(bufs.map(b => decodeContext().decodeAudioData(b.slice(0))));
     d.result = result;
     d.size = result.reduce((n, b) => n + b.length * b.numberOfChannels * 4, 0);
     return result;
@@ -306,17 +341,33 @@ async function warmOtherSongs(current) {
 // ---------- graph ----------
 
 function buildChannel(def) {
-  const fader = ctx.createGain();
-  const muteGain = ctx.createGain();
-  const analyser = ctx.createAnalyser();
-  analyser.fftSize = 1024;
-  analyser.smoothingTimeConstant = 0.6;
+  const c = { def, fader: null, muteGain: null, analyser: null, mute: false, solo: false };
+  if (ctx) attachChannel(c);
+  return c;
+}
 
-  fader.connect(muteGain);
-  muteGain.connect(analyser);
-  analyser.connect(master);
+// Give a channel its nodes, set to the channel's current mix state. Runs at
+// build when the context exists, otherwise when the first gesture creates it.
+function attachChannel(c) {
+  c.fader = ctx.createGain();
+  c.muteGain = ctx.createGain();
+  c.analyser = ctx.createAnalyser();
+  c.analyser.fftSize = 1024;
+  c.analyser.smoothingTimeConstant = 0.6;
 
-  return { def, fader, muteGain, analyser, mute: false, solo: false };
+  c.fader.connect(c.muteGain);
+  c.muteGain.connect(c.analyser);
+  c.analyser.connect(master);
+
+  if (c.ui) c.fader.gain.value = Number(c.ui.fader.value);
+  const anySolo = channels.some(x => x.solo);
+  c.muteGain.gain.value = (anySolo ? c.solo : !c.mute) ? 1 : 0;
+}
+
+// Gain changes ramp over 10 ms; before the context exists the nodes do not
+// either, and attachChannel sets them from the mix state instead.
+function setGain(node, g) {
+  if (node) node.gain.setTargetAtTime(g, ctx.currentTime, 0.01);
 }
 
 function teardownChannels() {
@@ -324,7 +375,7 @@ function teardownChannels() {
   stopSources();
   keepaliveStop();
   dropSegments();
-  for (const c of channels) c.analyser.disconnect();
+  for (const c of channels) if (c.analyser) c.analyser.disconnect();
   channels = [];
   meta = null;
   playing = false;
@@ -337,7 +388,7 @@ function applyMuteSolo() {
   const anySolo = channels.some(c => c.solo);
   for (const c of channels) {
     const audible = anySolo ? c.solo : !c.mute;
-    c.muteGain.gain.setTargetAtTime(audible ? 1 : 0, ctx.currentTime, 0.01);
+    setGain(c.muteGain, audible ? 1 : 0);
     c.ui.strip.classList.toggle('inactive', !audible);
     c.ui.mute.classList.toggle('on', c.mute);
     c.ui.solo.classList.toggle('on', c.solo);
@@ -459,7 +510,7 @@ function applyMixState(state) {
     c.mute = state.mute.includes(c.def.id);
     const g = state.gains[c.def.id] ?? 1;
     c.ui.fader.value = g;
-    c.fader.gain.setTargetAtTime(g, ctx.currentTime, 0.01);
+    setGain(c.fader, g);
   }
   if (state.t !== null) {
     seek(state.t);
@@ -759,6 +810,7 @@ function setPlayButton(on) {
 async function play() {
   if (!channels.length) return;
   keepaliveStart(); // must be called synchronously inside the user gesture
+  audioContext();   // likewise, if no earlier gesture created it
   guideWaiting = false;
   // Safari also reports 'interrupted' (phone call, backgrounding); resume covers both.
   if (ctx.state !== 'running') await ctx.resume();
@@ -1190,7 +1242,7 @@ function setMix(mix) {
     c.mute = mix.mute.includes(c.def.id);
     const g = mix.gains[c.def.id] ?? 1;
     c.ui.fader.value = g;
-    c.fader.gain.setTargetAtTime(g, ctx.currentTime, 0.01);
+    setGain(c.fader, g);
   }
   applyMuteSolo();
 }
@@ -2078,7 +2130,7 @@ function buildStrip(c, index) {
   const meter = strip.querySelector('.meter-fill');
 
   fader.addEventListener('input', () => {
-    c.fader.gain.setTargetAtTime(Number(fader.value), ctx.currentTime, 0.01);
+    setGain(c.fader, Number(fader.value));
   });
   fader.addEventListener('change', writeHash);
   mute.addEventListener('click', () => { c.mute = !c.mute; noteMixUsed(); applyMuteSolo(); });
@@ -2097,6 +2149,7 @@ function tick() {
     guideTick(pos);
 
     for (const c of channels) {
+      if (!c.analyser) continue;
       c.analyser.getByteTimeDomainData(meterBuf);
       let sum = 0;
       for (let i = 0; i < meterBuf.length; i++) {
