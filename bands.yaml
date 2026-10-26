@@ -12,6 +12,7 @@ phish:
 
 widespread-panic:
   name: Widespread Panic
+  short_name: WSP
   channels:
     guitar: {who: JB & Mikey, inst: Guitars}
     bass: {who: Schools, inst: Bass}

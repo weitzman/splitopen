@@ -77,13 +77,9 @@ h1 {
   color: var(--text);
   text-shadow: 0 0 24px rgba(242, 177, 52, 0.25);
 }
-/* The title is the song picker: the words plus a chevron that brightens on hover. */
+/* The title is the song picker; it turns gold under the pointer. */
 .song-pick {
-  display: inline-flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  align-items: center;
-  gap: 0.15em;
+  display: inline-block;
   padding: 0 0.1em;
   border: none;
   background: none;
@@ -93,31 +89,44 @@ h1 {
   text-shadow: inherit;
   cursor: pointer;
   border-radius: 12px;
+  transition: color 0.15s;
 }
-/* The pill beside the title says there are more songs and opens the picker. */
-.pick-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  margin-left: 0.25em;
-  padding: 6px 12px 6px 14px;
-  border-radius: 999px;
-  border: 1px solid var(--gold);
-  background: rgba(242, 177, 52, 0.12);
-  color: var(--gold);
-  font: 600 14px Inter, sans-serif;
-  letter-spacing: 0;
-  text-shadow: none;
-  white-space: nowrap;
-  vertical-align: middle;
-  transition: background 0.15s, color 0.15s;
-}
-.pick-pill[hidden] { display: none; }
-.pick-pill .chevron { width: 16px; height: 16px; transition: transform 0.15s; }
-.song-pick:hover .pick-pill, .song-pick:focus-visible .pick-pill { background: var(--gold); color: #1a1200; }
-.song-pick:hover .chevron { transform: translateY(2px); }
+.song-pick:hover { color: var(--gold); }
 .song-pick:focus-visible { outline: 2px solid var(--gold); outline-offset: 4px; }
 .song-row:focus-visible { outline: 2px solid var(--gold); outline-offset: -2px; }
+
+/* Under the venue: the next song, which one tap plays, and the full list.
+   Both say there are more songs; the row is the way to them. */
+.upnext[hidden] { display: none; }
+.upnext {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+.upnext-song, .upnext-all {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 12px 7px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: rgba(255,255,255,0.06);
+  color: var(--text);
+  font: 600 14px Inter, sans-serif;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+.upnext-song:hover, .upnext-all:hover { background: rgba(255,255,255,0.12); border-color: rgba(255,255,255,0.2); }
+.upnext-song:focus-visible, .upnext-all:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+.upnext-kicker { font-size: 11px; font-weight: 600; color: var(--gold); text-transform: uppercase; letter-spacing: 0.12em; margin-right: 2px; }
+.upnext-band { color: var(--muted); font-weight: 400; }
+.upnext-band::before { content: "·"; margin-right: 6px; }
+.upnext .chevron { width: 16px; height: 16px; }
+.upnext-all { border-color: var(--gold); color: var(--gold); background: rgba(242, 177, 52, 0.12); }
+.upnext-all:hover { background: var(--gold); color: #1a1200; border-color: var(--gold); }
 .venue { color: var(--muted); font-size: 14px; }
 
 .song {
