@@ -2181,6 +2181,7 @@ function renderHeader() {
   document.getElementById('venue').textContent = `${song.date} · ${song.venue} · ${song.city}`;
   document.title = `Split Open — ${song.title}`;
   renderGuideChips();
+  renderUpNext();
   for (const row of document.querySelectorAll('.song-row')) {
     row.classList.toggle('on', row.dataset.id === song.id);
   }
@@ -2274,11 +2275,26 @@ function wireSongPicker() {
     rows[next].focus();
     rows[next].scrollIntoView({ block: 'nearest' });
   });
-  // The pill on the title says how many songs there are to choose from.
-  const pill = document.getElementById('pick-pill');
+  // The row under the venue: the next song, and the whole list by count.
   const n = listedSongs().length;
-  document.getElementById('pick-count').textContent = n + (n === 1 ? ' song' : ' songs');
-  pill.hidden = false;
+  document.getElementById('upnext-count').textContent = `All ${n} songs`;
+  document.getElementById('upnext-song').addEventListener('click', () => {
+    if (leaveDraftOk()) mediaSessionStep(1);
+  });
+  document.getElementById('upnext-all').addEventListener('click', openSongPicker);
+}
+
+// Names the song after this one in the list; a song off the list (hidden)
+// is followed by the first.
+function renderUpNext() {
+  const listed = listedSongs();
+  const i = listed.findIndex(s => s.id === song.id);
+  const next = listed[(i + 1) % listed.length];
+  const row = document.getElementById('upnext');
+  row.hidden = !next || next.id === song.id;
+  if (!next) return;
+  document.getElementById('upnext-title').textContent = next.title;
+  document.getElementById('upnext-band').textContent = (bands[next.band] || {}).name || next.band;
 }
 
 // ---------- song switching ----------
