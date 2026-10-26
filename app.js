@@ -2178,7 +2178,21 @@ async function shareLink() {
 
 function renderHeader() {
   document.getElementById('title').textContent = song.title;
-  document.getElementById('venue').textContent = `${song.date} · ${band.short_name || band.name} · ${song.venue} · ${song.city}`;
+  // The date links to the recording the stems came from, when the song has one.
+  const venue = document.getElementById('venue');
+  venue.replaceChildren();
+  if (song.source) {
+    const a = document.createElement('a');
+    a.className = 'source';
+    a.href = song.source;
+    a.target = '_blank';
+    a.rel = 'noopener';
+    a.textContent = song.date;
+    venue.append(a);
+  } else {
+    venue.append(song.date);
+  }
+  venue.append(` · ${band.short_name || band.name} · ${song.venue} · ${song.city}`);
   document.title = `Split Open — ${song.title}`;
   renderGuideChips();
   renderUpNext();
