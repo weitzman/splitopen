@@ -354,13 +354,20 @@ function applyMuteSolo() {
 
 // ---------- URL state ----------
 //
-// The hash names the song first, so older links still work, then carries the
-// mix and the moment as &-separated key=value pairs:
-//   #1998-07-26-funky-bitch&solo=keys&mute=vocals&g=guitar:0.8,bass:1.2&t=312
-// Keys at their defaults are left out, so an untouched mix is just #songid.
+// A song's address is s/<id>/ under the site root: the page there is the
+// player with that song's own link preview (scripts/song-pages.py), so the
+// address bar is a link worth copying. The hash carries the mix and the
+// moment as &-separated key=value pairs:
+//   s/1998-07-26-funky-bitch/#solo=keys&mute=vocals&g=guitar:0.8,bass:1.2&t=312
+// Keys at their defaults are left out, so an untouched mix has no hash.
 // guide= names a listening guide (see the guides section below).
-// The hash is rewritten with replaceState so Back still returns to the
-// previous song rather than stepping through every mute.
+// A mix change is written with replaceState and a song change with
+// pushState, so Back returns to the previous song rather than stepping
+// through every mute.
+
+// The site root, which every relative fetch and link resolves against: the
+// song pages carry a <base> pointing here.
+const SITE = new URL('.', document.baseURI);
 
 const GAIN_MAX = 1.5;
 let hashPos = null; // position (s) last written to the hash; null means none
@@ -396,9 +403,16 @@ function parseGains(val) {
   return gainsFrom(val.split(',').map(item => item.split(':')));
 }
 
-function parseHash() {
-  const [idPart, ...pairs] = location.hash.slice(1).split('&');
-  const state = { id: decodeURIComponent(idPart), solo: [], mute: [], gains: {}, t: null, guide: null };
+// The song id in the address: the s/<id>/ segment of the path. The site
+// root and any other path (404.html) have none, so the first song loads.
+function urlSongId() {
+  const m = location.pathname.match(/\/s\/([\w-]+)\/?$/);
+  return m ? m[1] : '';
+}
+
+function parseUrl() {
+  const pairs = location.hash.slice(1).split('&');
+  const state = { id: urlSongId(), solo: [], mute: [], gains: {}, t: null, guide: null };
   for (const pair of pairs) {
     const eq = pair.indexOf('=');
     if (eq < 0) continue;
@@ -430,8 +444,9 @@ function mixState() {
   };
 }
 
-function buildHash() {
-  const parts = [song.id];
+// The key=value pairs after the song id: the mix, the moment, the guide.
+function hashPairs() {
+  const parts = [];
   const { solo, mute, gains } = mixState();
   const gainList = Object.entries(gains).map(([id, g]) => id + ':' + g);
   if (solo.length) parts.push('solo=' + solo.join(','));
@@ -440,13 +455,37 @@ function buildHash() {
   const t = Math.round(hashPos || 0);
   if (t > 0) parts.push('t=' + t);
   if (guideParam) parts.push('guide=' + guideParam);
-  return '#' + parts.join('&');
+  return parts;
 }
 
+// The address of a song's page with the given pairs in its hash. The query
+// (?guide=1) is kept.
+function songUrl(id, pairs) {
+  const url = new URL('s/' + id + '/', SITE);
+  url.search = location.search;
+  url.hash = pairs.length ? '#' + pairs.join('&') : '';
+  return url.href;
+}
+
+function songLink(pairs) {
+  return songUrl(song.id, pairs);
+}
+
+// Brings the address in line with the loaded song and the current mix.
+// 404.html carries an absolute <base>, so when it is opened from another
+// origin (a local server) the song's address is not ours to write.
 function writeHash() {
   if (!song || !channels.length) return;
-  const h = buildHash();
-  if (h !== location.hash) history.replaceState(null, '', h);
+  const href = songUrl(song.id, hashPairs());
+  if (href !== location.href && SITE.origin === location.origin) history.replaceState(null, '', href);
+}
+
+// Goes to another song: a new history entry at its page, then the load.
+function goToSong(id) {
+  const href = songUrl(id, []);
+  if (SITE.origin !== location.origin) { location.href = href; return; }
+  history.pushState(null, '', href);
+  loadSong(parseUrl());
 }
 
 // Position goes into the hash only on seek, pause, or Share, never from
@@ -884,7 +923,7 @@ function mediaSessionStep(dir) {
   const listed = listedSongs();
   if (!song || !listed.length) return;
   const i = listed.findIndex(s => s.id === song.id);
-  location.hash = listed[(i + dir + listed.length) % listed.length].id;
+  goToSong(listed[(i + dir + listed.length) % listed.length].id);
 }
 
 function mediaSessionMetadata() {
@@ -894,7 +933,7 @@ function mediaSessionMetadata() {
       title: song.title,
       artist: band.name,
       album: `${song.date} · ${song.venue}`,
-      artwork: [{ src: new URL('apple-touch-icon.png', location.href).href, sizes: '180x180', type: 'image/png' }],
+      artwork: [{ src: new URL('apple-touch-icon.png', SITE).href, sizes: '180x180', type: 'image/png' }],
     });
   } catch (_) { /* MediaMetadata unavailable */ }
 }
@@ -1033,7 +1072,7 @@ async function decodeGuide(param) {
 window.SplitOpen = {
   async guideLink(text) {
     if (!song) throw new Error('load a song first');
-    return location.href.split('#')[0] + '#' + song.id + '&guide=' + await encodeGuide(text);
+    return songLink(['guide=' + await encodeGuide(text)]);
   },
 };
 
@@ -1841,7 +1880,7 @@ async function submitOffer(e) {
   ui.offerSheet.close();
   let notice = `Send the email your mail app opened, to ${OFFER_EMAIL}. The guide stays in this link meanwhile.`;
   await offerSent(draft, text, notice);
-  const link = location.href.split('#')[0] + '#' + song.id + '&guide=' + guide.param;
+  const link = songLink(['guide=' + guide.param]);
   const head = `A guide for ${song.title}, for the library.\n\nSong: ${song.id}\nFile: guides/${song.id}/${slug}.yaml\nLink: ${link}\n\n`;
   let url = offerMailUrl(draft, head + text);
   if (url.length > OFFER_MAIL_MAX) {
@@ -2184,7 +2223,7 @@ async function shareLink() {
   if (!channels.length) return;
   tipsShared();
   writePosition();
-  const url = location.href;
+  const url = songLink(hashPairs());
   if (navigator.share) {
     try {
       await navigator.share({ title: document.title, url });
@@ -2274,7 +2313,7 @@ function renderSongList(filter = '') {
         ui.songSheet.close();
         if (song && s.id === song.id) return;
         if (!leaveDraftOk()) return;
-        location.hash = s.id;
+        goToSong(s.id);
       });
       list.appendChild(row);
     }
@@ -2326,7 +2365,7 @@ function wireSongPicker() {
   const n = listedSongs().length;
   document.getElementById('upnext-count').textContent = `All ${n} songs`;
   document.getElementById('upnext-song').addEventListener('click', () => {
-    if (upNext && leaveDraftOk()) location.hash = upNext.id;
+    if (upNext && leaveDraftOk()) goToSong(upNext.id);
   });
   document.getElementById('upnext-all').addEventListener('click', openSongPicker);
 }
@@ -2416,6 +2455,7 @@ async function loadSong(state) {
     keepWindow(segIndex(offset));
     fillBytes(token);
     syncGuide(state);
+    writeHash(); // the root and 404.html become the song's page
     tipsSongReady();
     warmOtherSongs(song);
   } catch (err) {
@@ -2446,17 +2486,19 @@ async function loadSong(state) {
     return;
   }
   wireSongPicker();
-  const fromHash = () => loadSong(parseHash());
-  window.addEventListener('hashchange', () => {
-    // Our own replaceState writes never fire this, so it is a song click, a
-    // Back/Forward step, or a hand-edited URL. A same-song change only has
-    // to apply the mix; only a new song id loads stems.
-    const state = parseHash();
+  // Our own replaceState and pushState writes fire neither event, so this
+  // is a Back/Forward step or a hand-edited URL (which fires both; applying
+  // the same mix twice is harmless). A same-song change only has to apply
+  // the mix; only a new song id loads stems.
+  const fromUrl = () => {
+    const state = parseUrl();
     if (song && channels.length && findSong(state.id).id === song.id) {
       applyMixState(state);
       return syncGuide(state);
     }
-    fromHash();
-  });
-  fromHash();
+    loadSong(state);
+  };
+  window.addEventListener('popstate', fromUrl);
+  window.addEventListener('hashchange', fromUrl);
+  loadSong(parseUrl());
 })();
