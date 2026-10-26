@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://weitzman.github.io/splitopen/schemas/common.schema.json",
+  "title": "Split Open shared definitions",
+  "description": "Definitions the songs, bands and guide schemas share. The stem list here is the one the player has slots for; scripts/schema.py reads it, so a new stem is added here and in app.js.",
+  "$defs": {
+    "stem": {
+      "description": "A player's channel: one of the stems a song can have.",
+      "type": "string",
+      "enum": [
+        "guitar",
+        "bass",
+        "keys",
+        "drums",
+        "vocals",
+        "horns",
+        "flute"
+      ]
+    },
+    "slug": {
+      "description": "An id for a URL hash or a file name: letters, digits, - and _.",
+      "type": "string",
+      "pattern": "^[\\w-]+$",
+      "examples": [
+        "1998-07-26-funky-bitch",
+        "widespread-panic"
+      ]
+    },
+    "text": {
+      "description": "A string with something in it.",
+      "type": "string",
+      "pattern": "\\S"
+    },
+    "url": {
+      "description": "A full web link.",
+      "type": "string",
+      "pattern": "^https?://\\S+$",
+      "examples": [
+        "https://archive.org/details/phish_1998-07-26_SBD_RM26"
+      ]
+    },
+    "clock": {
+      "description": "A moment in the song as m:ss, with tenths if wanted (1:05.5). Kept as a string: in YAML 1.2, which the player reads, 0:30 is text.",
+      "type": "string",
+      "pattern": "^\\d+:\\d{2}(?:\\.\\d+)?$",
+      "examples": [
+        "0:30",
+        "1:05.5"
+      ]
+    },
+    "gain": {
+      "description": "A fader level, 0 to 1.5 (1 is unity).",
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1.5
+    }
+  }
+}
