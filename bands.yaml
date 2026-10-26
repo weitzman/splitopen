@@ -62,7 +62,7 @@ cosmic-country:
   short_name: Cosmic Country
   channels:
     guitar: {who: Daniel, inst: Guitar}
-    bass: {who: Will, inst: Bass}
-    keys: {who: Nathan, inst: Keys}
+    bass: {who: Mustang McGee, inst: Bass}
+    keys: {who: Sugarlegg, inst: Keys}
     drums: {who: Noah, inst: Drums}
     vocals: {who: Vocals, inst: Larynx}
