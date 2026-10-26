@@ -277,15 +277,21 @@ function loadFirstSegment(k) {
 }
 
 // Warm the other songs in the background: their manifests and first
-// segments, nearest in the list first, so switching songs starts at once.
+// segments, the Up next song first and then nearest in the list, so
+// switching songs starts at once.
 let warmToken = 0;
 async function warmOtherSongs(current) {
   const token = ++warmToken;
   if (navigator.connection && navigator.connection.saveData) return;
   const listed = listedSongs();
   const i = listed.findIndex(s => s.id === current.id);
+  const order = [];
+  if (upNext && upNext.id !== current.id) order.push(upNext);
   for (let d = 1; d < listed.length; d++) {
     const s = listed[(i + d) % listed.length];
+    if (!order.includes(s)) order.push(s);
+  }
+  for (const s of order) {
     if (token !== warmToken) return;
     try {
       await fetchMeta(s);
@@ -2313,23 +2319,29 @@ function wireSongPicker() {
     rows[next].focus();
     rows[next].scrollIntoView({ block: 'nearest' });
   });
-  // The row under the venue: the next song, and the whole list by count.
+  // The row under the venue: a random other song, and the whole list by count.
   const n = listedSongs().length;
   document.getElementById('upnext-count').textContent = `All ${n} songs`;
   document.getElementById('upnext-song').addEventListener('click', () => {
-    if (leaveDraftOk()) mediaSessionStep(1);
+    if (upNext && leaveDraftOk()) location.hash = upNext.id;
   });
   document.getElementById('upnext-all').addEventListener('click', openSongPicker);
 }
 
-// Names the song after this one in the list; a song off the list (hidden)
-// is followed by the first.
+// The song the Up next row offers: a random listed song other than the
+// current one, drawn once per song so the row and its button agree.
+let upNext = null;
+
+function pickUpNext() {
+  const others = listedSongs().filter(s => s.id !== song.id);
+  upNext = others.length ? others[Math.floor(Math.random() * others.length)] : null;
+  return upNext;
+}
+
 function renderUpNext() {
-  const listed = listedSongs();
-  const i = listed.findIndex(s => s.id === song.id);
-  const next = listed[(i + 1) % listed.length];
+  const next = pickUpNext();
   const row = document.getElementById('upnext');
-  row.hidden = !next || next.id === song.id;
+  row.hidden = !next;
   if (!next) return;
   document.getElementById('upnext-title').textContent = next.title;
   const nextBand = bands[next.band] || {};
