@@ -12,12 +12,13 @@ channel with mute, solo, and a fader, playing in sync.
   through `scripts/yaml12.py`, which gives PyYAML the same YAML 1.2 reading:
   `0:30` and `1998-07-26` are strings, `yes` is a word, only `true` and
   `false` are booleans.
-- `audio/songs/<id>/` (local only, see Hosting) — the song's stems (any of
-  guitar, bass, keys, drums, vocals, horns, flute), each a directory of 10-second Opus
-  segments (128 kbps, Ogg container) plus a `meta.json` with the song's
-  length and the segment grid. The player decodes a few segments ahead of
-  the playhead and keeps decoded audio within a memory budget, so a song
-  starts in under a second
+- A song directory (the song's `dir` in `songs.yaml`, under `songs/<id>/` in
+  the bucket, see Hosting) holds the song's stems (any of guitar, bass, keys,
+  drums, vocals, horns, flute), each a directory of 10-second Opus segments
+  (128 kbps, Ogg container), plus a `meta.json` with the song's length and
+  the segment grid. The player decodes a few segments ahead of the playhead
+  and keeps decoded audio within a memory budget, so a song starts in under
+  a second
 - A song in `songs.yaml` names its band, whose lineup comes from `bands.yaml`
   (`who` and `inst` per stem: guitar, bass, keys, drums, vocals, horns,
   flute). A band lists only the stems it has; a string band with no keys or
@@ -37,7 +38,8 @@ channel with mute, solo, and a fader, playing in sync.
   the song in `songs.yaml`
 - `scripts/upload-stems.sh` — sync `audio/songs/` (or one song) to the bucket
 - `scripts/segment-stems.py` — encode a song's stems (any audio ffmpeg reads) as
-  segments into a song directory; `scripts/seam-test.py` decodes a stem's
+  segments into a song directory under `audio/songs/<id>/`, the gitignored
+  local copy that `upload-stems.sh` syncs; `scripts/seam-test.py` decodes a stem's
   segments the way the player plays them and checks the joins are seamless
 - `scripts/split-other.py` — divide BS-Roformer-SW's `other` stem, which
   holds every wind instrument and (for some bands) the organ, between
