@@ -2303,7 +2303,10 @@ function wireSongPicker() {
   ui.songSheet.addEventListener('click', e => { if (e.target === ui.songSheet) ui.songSheet.close(); });
   // Up and Down walk the list (from the search box, Down goes to the first
   // song and Up to the last); Enter in the search box picks the first match.
+  // Escape closes the sheet even from a search box with text in it, where
+  // the browser would otherwise spend the first press clearing the field.
   ui.songSheet.addEventListener('keydown', e => {
+    if (e.key === 'Escape') { e.preventDefault(); ui.songSheet.close(); return; }
     if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp' && e.key !== 'Enter') return;
     const rows = Array.from(ui.songSheet.querySelectorAll('.song-row'));
     if (!rows.length) return;
