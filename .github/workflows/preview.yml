@@ -36,6 +36,11 @@ jobs:
       - name: Render each song's preview card with the runner's Chrome
         run: python3 scripts/song-cards.py
 
+      # The deploy commits the folder with git, which honors .gitignore, so
+      # the generated s/ would be left out of the site with it in place.
+      - name: Drop .gitignore so the generated pages and cards deploy
+        run: rm .gitignore
+
       - name: Deploy preview
         uses: rossjrw/pr-preview-action@v1
         with:
