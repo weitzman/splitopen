@@ -49,12 +49,21 @@
     <h1>
       <button class="song-pick" id="song-pick" title="Choose a song (/)" aria-haspopup="dialog">
         <span id="title">Split Open</span>
-        <span class="pick-pill" id="pick-pill" hidden><span id="pick-count"></span>
-          <svg class="chevron" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
-        </span>
       </button>
     </h1>
     <div class="venue" id="venue"></div>
+    <div class="upnext" id="upnext" hidden>
+      <button class="upnext-song" id="upnext-song" title="Play the next song">
+        <span class="upnext-kicker">Up next</span>
+        <span class="upnext-title" id="upnext-title"></span>
+        <span class="upnext-band" id="upnext-band"></span>
+        <svg class="chevron" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
+      </button>
+      <button class="upnext-all" id="upnext-all" title="Choose a song (/)" aria-haspopup="dialog">
+        <span id="upnext-count"></span>
+        <svg class="chevron" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+      </button>
+    </div>
     <nav class="guides" id="guides" aria-label="Guides"></nav>
   </header>
 
@@ -109,7 +118,7 @@
     <span><kbd>←</kbd> <kbd>→</kbd> ±5 s</span>
     <span><kbd>/</kbd> choose a song</span>
     <span><kbd>L</kbd> share mix</span>
-    <p class="colophon">Split Open so we can learn and appreciate. By <a href="https://weitzman.github.io">Moshe Weitzman</a>.</p>
+    <p class="colophon">Split Open, to learn &amp; appreciate. By <a href="https://weitzman.github.io">Moshe Weitzman</a>.</p>
   </footer>
 </main>
 
