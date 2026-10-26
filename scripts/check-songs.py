@@ -36,7 +36,7 @@ STEMS = schema.STEMS
 META_FIELDS = ['duration', 'segment', 'lead', 'segments']
 URL = re.compile(r'^https?://\S+$')
 
-# r2.dev answers 403 to Python's default User-Agent; any other name is fine.
+# Cloudflare answers 403 to Python's default User-Agent; any other name is fine.
 HEADERS = {'User-Agent': 'splitopen-check-songs'}
 
 

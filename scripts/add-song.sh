@@ -27,7 +27,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 MODEL="BS-Roformer-SW.ckpt"
 BITRATE="128k"
-STEMS_URL="${STEMS_URL:-https://pub-24e1ed6bc198435aa93f9f41227d48b5.r2.dev/songs}"  # where upload-stems.sh puts them, as the player reads them
+STEMS_URL="${STEMS_URL:-https://stems.splitopen.fm/songs}"  # where upload-stems.sh puts them, as the player reads them
 
 url="${1:-}"; shift || true
 [[ -n "$url" ]] || { sed -n '2,13p' "$0" | sed 's/^# \{0,1\}//'; exit 1; }
