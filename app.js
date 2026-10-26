@@ -2294,7 +2294,8 @@ function renderUpNext() {
   row.hidden = !next || next.id === song.id;
   if (!next) return;
   document.getElementById('upnext-title').textContent = next.title;
-  document.getElementById('upnext-band').textContent = (bands[next.band] || {}).name || next.band;
+  const nextBand = bands[next.band] || {};
+  document.getElementById('upnext-band').textContent = nextBand.short_name || nextBand.name || next.band;
 }
 
 // ---------- song switching ----------
