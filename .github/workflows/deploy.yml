@@ -45,4 +45,7 @@ jobs:
           branch: gh-pages
           clean: true
           clean-exclude: pr-preview
+          # One commit, rewritten each deploy, so gh-pages does not accumulate
+          # a full copy of the site per push.
+          single-commit: true
           commit-message: Deploy ${{ github.sha }}
