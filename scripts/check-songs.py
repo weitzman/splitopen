@@ -10,7 +10,10 @@ path is checked on disk. This script is strict: a missing or mistyped
 field, an unknown field, a band the song names that is not in bands.yaml, a
 segment that is not there, or a date that is not a date all fail the run
 with the song named, so a pull request with a broken entry fails its check
-and a bad merge fails the deploy.
+and a bad merge fails the deploy. The shape of the files (fields, kinds,
+required ones) is schemas/songs.schema.json and schemas/bands.schema.json,
+applied through scripts/schema.py; this script adds what a schema cannot
+say.
 
     python3 scripts/check-songs.py
 """
@@ -26,17 +29,15 @@ from concurrent.futures import ThreadPoolExecutor
 
 import yaml
 import yaml12
+import schema
 
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
-SLUG = re.compile(r'^[\w-]+$')
-STEMS = ['guitar', 'bass', 'keys', 'drums', 'vocals', 'horns', 'flute']
+STEMS = schema.STEMS
 META_FIELDS = ['duration', 'segment', 'lead', 'segments']
 URL = re.compile(r'^https?://\S+$')
 
-SONG_REQUIRED = ['id', 'band', 'title', 'date', 'venue', 'city', 'source', 'dir']
 # r2.dev answers 403 to Python's default User-Agent; any other name is fine.
 HEADERS = {'User-Agent': 'splitopen-check-songs'}
-SONG_OPTIONAL = ['set', 'hidden', 'channels']
 
 
 def load(name, errors):
@@ -49,19 +50,6 @@ def load(name, errors):
     except yaml.YAMLError as e:
         errors.append(f'{name}: not valid YAML ({" ".join(str(e).split())})')
     return None
-
-
-def text(obj, key, where, errors, required=True):
-    """A non-empty string field, or an error."""
-    if key not in obj:
-        if required:
-            errors.append(f'{where}: no "{key}"')
-        return None
-    v = obj[key]
-    if not isinstance(v, str) or not v.strip():
-        errors.append(f'{where}: "{key}" must be a non-empty string')
-        return None
-    return v
 
 
 def read_meta(d):
@@ -125,110 +113,64 @@ def check_stems(d, where, errors, stems):
                 errors.append(f'{where}: missing or empty segment {d}{name}')
 
 
-def check_channels(channels, where, errors, complete, band_channels=()):
-    """A map of stem id to {who, inst}. A band's lists the stems it has, each
-    with both; a song's lists only what it overrides, or adds for the night
-    (a stem its band lacks, which then needs both)."""
-    if not isinstance(channels, dict):
-        errors.append(f'{where}: "channels" must be a map keyed by stem')
-        return
-    if complete and not channels:
-        errors.append(f'{where}: "channels" lists no stems')
-    for stem, ch in channels.items():
-        here = f'{where} channels.{stem}'
-        if stem not in STEMS:
-            errors.append(f'{here}: unknown stem (one of {", ".join(STEMS)})')
-            continue
-        if not isinstance(ch, dict):
-            errors.append(f'{here}: must be a map with "who" and/or "inst"')
-            continue
-        for key in ch:
-            if key not in ('who', 'inst'):
-                errors.append(f'{here}: unknown field "{key}"')
-        for key in ('who', 'inst'):
-            text(ch, key, here, errors, required=complete or stem not in band_channels)
-
-
 def check_bands(bands, errors):
-    """Returns each band's channels map by slug."""
+    """Checks bands.yaml against its schema. Returns each band's channels map
+    by slug, for the songs' checks."""
+    errors += schema.check('bands.schema.json', bands, 'bands.yaml',
+                           label=lambda path: schema.place(path[1:], str(path[0])) if path else '')
     if not isinstance(bands, dict):
-        errors.append('bands.yaml: must be a map keyed by band slug')
         return {}
-    for slug, band in bands.items():
-        where = f'bands.yaml {slug}'
-        if not SLUG.match(slug):
-            errors.append(f'{where}: the slug may only have letters, digits, - and _')
-        if not isinstance(band, dict):
-            errors.append(f'{where}: must be a map with "name" and "channels"')
-            continue
-        for key in band:
-            if key not in ('name', 'short_name', 'channels'):
-                errors.append(f'{where}: unknown field "{key}"')
-        text(band, 'name', where, errors)
-        text(band, 'short_name', where, errors, required=False)
-        if 'channels' in band:
-            check_channels(band['channels'], where, errors, complete=True)
-        else:
-            errors.append(f'{where}: no "channels"')
     return {slug: band.get('channels', {}) if isinstance(band, dict) else {} for slug, band in bands.items()}
 
 
 def check_songs(songs, band_ids, errors):
+    """Checks songs.yaml against its schema, then what the schema cannot say:
+    ids are unique, the band is in bands.yaml, the date is a real date, dir
+    is the song's own and holds its stems, and a stem a song adds that its
+    band lacks has both who and inst."""
+    def label(path):
+        if not path or not isinstance(path[0], int):
+            return schema.place(path)
+        song = songs[path[0]]
+        sid = song.get('id') if isinstance(song, dict) else None
+        return schema.place(path[1:], sid if isinstance(sid, str) else f'[{path[0]}]')
+    errors += schema.check('songs.schema.json', songs, 'songs.yaml', label=label)
     if not isinstance(songs, list):
-        errors.append('songs.yaml: must be a list of songs')
         return
     seen = set()
     for i, song in enumerate(songs):
-        where = f'songs.yaml [{i}]'
         if not isinstance(song, dict):
-            errors.append(f'{where}: must be a map')
             continue
-        sid = text(song, 'id', where, errors)
-        if sid:
-            where = f'songs.yaml {sid}'
-            if not SLUG.match(sid):
-                errors.append(f'{where}: the id may only have letters, digits, - and _')
-            if sid in seen:
-                errors.append(f'{where}: duplicate id')
-            seen.add(sid)
-        for key in song:
-            if key not in SONG_REQUIRED and key not in SONG_OPTIONAL:
-                errors.append(f'{where}: unknown field "{key}"')
-        for key in SONG_REQUIRED:
-            if key not in ('id', 'band', 'date', 'source', 'dir'):
-                text(song, key, where, errors)
-        text(song, 'set', where, errors, required=False)
-        band = text(song, 'band', where, errors)
-        if band and band not in band_ids:
+        sid = song.get('id')
+        where = f'songs.yaml {sid}' if isinstance(sid, str) else f'songs.yaml [{i}]'
+        if sid in seen:
+            errors.append(f'{where}: duplicate id')
+        seen.add(sid)
+        band = song.get('band')
+        if isinstance(band, str) and band not in band_ids:
             errors.append(f'{where}: band "{band}" is not in bands.yaml')
         band_channels = band_ids.get(band) or {}
         if not isinstance(band_channels, dict):
             band_channels = {}
         own = song.get('channels') if isinstance(song.get('channels'), dict) else {}
         stems = [s for s in STEMS if s in band_channels or s in own]  # the stems the player will fetch
-        date = text(song, 'date', where, errors)
-        if date:
+        date = song.get('date')
+        if isinstance(date, str) and re.match(r'^\d{4}-\d{2}-\d{2}$', date):
             try:
                 datetime.date.fromisoformat(date)
-                if not re.match(r'^\d{4}-\d{2}-\d{2}$', date):
-                    raise ValueError
             except ValueError:
-                errors.append(f'{where}: date "{date}" is not YYYY-MM-DD')
-        source = text(song, 'source', where, errors)
-        if source and not URL.match(source):
-            errors.append(f'{where}: source "{source}" is not a full link')
-        d = text(song, 'dir', where, errors)
-        if d:
-            if sid and not d.endswith(f'/{sid}/'):
+                errors.append(f'{where}: there is no date {date}')
+        d = song.get('dir')
+        if isinstance(d, str) and (URL.match(d) or d.startswith('audio/songs/')) and d.endswith('/'):
+            if isinstance(sid, str) and not d.endswith(f'/{sid}/'):
                 errors.append(f'{where}: dir should end with "/{sid}/", not "{d}"')
-            elif not (URL.match(d) or d.startswith('audio/songs/')):
-                errors.append(f'{where}: dir "{d}" is neither a bucket URL nor audio/songs/{sid}/')
             else:
                 check_stems(d, where, errors, stems)
-        if 'hidden' in song and not isinstance(song['hidden'], bool):
-            errors.append(f'{where}: "hidden" must be true or false')
-        if 'channels' in song:
-            check_channels(song['channels'], where, errors, complete=False, band_channels=band_channels)
+        for stem, ch in own.items():
+            if stem in STEMS and stem not in band_channels and isinstance(ch, dict):
+                for key in ('who', 'inst'):
+                    if key not in ch:
+                        errors.append(f'{where} channels.{stem}: a stem the band lacks needs "{key}" too')
     if not any(isinstance(s, dict) and not s.get('hidden') for s in songs):
         errors.append('songs.yaml: every song is hidden; the picker would be empty')
 
