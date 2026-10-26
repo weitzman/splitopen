@@ -27,6 +27,17 @@ jobs:
       - name: Index the guides
         run: python3 scripts/guides-index.py
 
+      - name: Write the song pages, which carry each song's link preview
+        run: python3 scripts/song-pages.py
+
+      - name: Render each song's preview card with the runner's Chrome
+        run: python3 scripts/song-cards.py
+
+      # The deploy commits the folder with git, which honors .gitignore, so
+      # the generated s/ would be left out of the site with it in place.
+      - name: Drop .gitignore so the generated pages and cards deploy
+        run: rm .gitignore
+
       - name: Publish to gh-pages
         uses: JamesIves/github-pages-deploy-action@v4
         with:

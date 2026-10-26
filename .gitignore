@@ -5,3 +5,8 @@ audio/src/
 audio/stems/
 audio/songs/
 .DS_Store
+# The song pages and 404.html are derived from index.html and songs.yaml by
+# scripts/song-pages.py at deploy time; scripts/serve.py renders them on
+# the fly locally.
+s/
+404.html
