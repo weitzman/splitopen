@@ -164,7 +164,7 @@ A guide travels in the link: `#songid&guide=<slug>` for one in the repo, or
 Run locally with `python3 scripts/serve.py` (a static server that turns
 caching off, so a reload always gets the current files) and open
 `http://localhost:8765/`. Any static server from the repo root works too.
-The scripts need PyYAML and jsonschema (`python3 -m pip install pyyaml jsonschema`);
+The scripts need PyYAML and jsonschema 4.18 or later (`python3 -m pip install pyyaml 'jsonschema>=4.18'`);
 the workflows install them when the runner lacks them.
 
 The site is served by GitHub Pages from the `gh-pages` branch, which a

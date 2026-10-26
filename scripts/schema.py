@@ -14,7 +14,7 @@ segment that is there) in code.
 import json
 import os
 
-from jsonschema import Draft202012Validator
+from jsonschema import Draft202012Validator  # 4.18 or later, for referencing
 from referencing import Registry, Resource
 
 DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'schemas')
