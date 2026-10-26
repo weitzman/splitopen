@@ -1,7 +1,6 @@
-# Introdution
+# Introduction
 
 Our favorite songs, [Split Open](https://www.splitopen.fm) so we can learn and appreciate. Solo the keys during a particularly pretty passage, or mute the guitar so you can play that part. My dream for this project is for bands to take my code (its freely available) and offer this player as a service to their fans. I'm available to help. My email is weitzman@tejasa.com.
-
 
 # Technology
 
@@ -40,11 +39,7 @@ channel with mute, solo, and a fader, playing in sync.
   [bands.schema.json](https://www.splitopen.fm/schemas/bands.schema.json) and
   [guide.schema.json](https://www.splitopen.fm/schemas/guide.schema.json),
   sharing `common.schema.json` (the stem list and the common string kinds).
-  Each YAML file's first line is a `# yaml-language-server: $schema=`
-  comment pointing at its schema, so an editor with a YAML language server
-  (VS Code's YAML extension, for one) completes the fields and marks
-  mistakes as you type. The check scripts apply the same schemas through
-  `scripts/schema.py`, so the rules live in one place.
+  The check scripts apply the same schemas through `scripts/schema.py`.
 - `scripts/check-songs.py` — checks `songs.yaml` and `bands.yaml` strictly,
   as the player reads them: their schemas (every field present and of the
   right kind, no unknown fields), then the band in `bands.yaml`, the date a
@@ -55,8 +50,7 @@ channel with mute, solo, and a fader, playing in sync.
   Unfurling below.
 
 A song's address is `s/<id>/`, and the hash holds the mix and the moment, so
-a link can reproduce both; the pairs are `&`-separated `key=value`, all
-optional:
+a link can reproduce both:
 
     s/1998-07-26-funky-bitch/#solo=keys&mute=vocals&g=guitar:0.8,bass:1.2&t=312
 
@@ -67,20 +61,6 @@ optional:
 The player keeps the address current as you mix (a mix change replaces the
 history entry, a song change adds one), and the Share button (or `L`) copies
 it with the current position.
-
-## Unfurling
-
-Unfurlers never see the hash, which is why the song is in the path: the page
-at `s/<id>/` is `index.html` with the song's own title, description and card
-in its Open Graph and Twitter tags (the block `index.html` marks with
-`link preview` comments) and a `<base>` at the site root, so the address bar
-is a link that unfurls as the song. The deploy workflows write the pages,
-plus a `404.html` that boots the player for a path with no file, with
-`scripts/song-pages.py`, and render the cards with `scripts/song-cards.py`
-(headless Chrome, from a template of the player); `s/` and `404.html` are
-gitignored, and `scripts/serve.py` renders the pages on the fly locally. The
-site's own card, `social.png`, is committed: rerun
-`python3 scripts/song-cards.py --site --only` after changing the template.
 
 ## Hosting
 
@@ -103,81 +83,21 @@ immutable cache header on segments and an hour on `meta.json`.
 
 ## Guides
 
-Guides is an experimental feature which is not yet shown by default. The **Guides** row under the song title is shown only with `?guide=1` in the query string (before the hash).
-
-A guide is a listening tour of a song: an ordered list of tips, each a
-passage, a mix, and a note. The mix holds for the passage and the band plays
-in full between tips; when the playhead reaches a tip its note is shown.
+Guides is an experimental feature which is not yet shown by default. Append `?guide=1` to the query string to show the **Guides** row under the song title. A guide is a listening tour of a song: an ordered list of tips, each a
+passage, a mix, and a description..
 
 To write one, press **+ New guide** under the song title, play the song, set mute/solo, and press `N` (or
 **Tip: Start**) where a passage worth a tip begins. The tip takes that
 moment and the current mix, and runs to the next tip unless given an end.
 The list shows one line per tip with edit, play and delete; edit opens that
-tip alone, with its start, optional end and description. Start and end are set from the playhead: scrub or
-play to the moment, then press Set. Tapping the mix label opens a sheet with
-Mute and Solo per player, heard as you choose. Tips can be dragged into another order
-by their handle. The list is always saved: the draft is kept in the link as it
-changes, so **Share** hands it out and a reload brings it back. The title, author and language are not asked for while writing; they
-belong to the step of offering a guide to the library.
-
-Guides are written as YAML:
-
-    title: Mike's entrance
-    lang: en
-    by: Foo Bar
-    url: https://example.com/foo
-    tips:
-      - at: 0:00
-        to: 0:32
-        solo: [drums]
-        note: Fish sets up the groove alone.
-      - at: 0:32
-        to: 1:05
-        solo: [drums, bass]
-        pause: true
-        note: Mike enters. Notice he plays behind the beat.
-      - at: 1:05
-        to: 1:20
-        mute: vocals
-        note: The band without the singing.
-      - at: 1:05
-        to: 1:20
-        solo: keys
-        gain: {bass: 0.8}
-        note: The same passage, Page alone.
-
-- The top-level keys are `title`, `lang` (the notes' language code, e.g.
-  `en` or `fr`), `by` (the author's name, shown after the guide's title),
-  `url` (a link for the author's name) and `tips`.
-- A tip has `at` (`m:ss`, with tenths if wanted: `1:05.5`), then any of `to`
-  (where the tip ends; without it, at the next tip), `solo` and `mute` (a
-  player or a list of players: `guitar`, `bass`, `keys`, `drums`, `vocals`,
-  `horns`, `flute`),
-  `gain` (a map of player to fader level, 0 to 1.5), `pause` and `note`. A
-  later tip may start before the one before it ends, which is how a passage
-  is replayed.
-- `pause: true` stops the music at the tip until the listener presses Continue.
-- A note that holds a colon followed by a space, or a `#`, needs quotes, as
-  YAML has it: `note: "Trey: listen for the bend"`.
-
-Guides kept in the repo live at `guides/<song id>/<slug>.yaml` in the form
-above, listed by slug under the song id in `guides.json`; they appear as
-pills under the song and open with `guide=<slug>`. `guides.json` is derived
-from the files: the deploy workflows regenerate it, and
-`python3 scripts/guides-index.py` checks every guide against
-`schemas/guide.schema.json` and rewrites it locally.
+tip alone, with its start, optional end and description.
 
 To offer a guide to the library, press **Contribute** on a guide you wrote
 (or one that reached you by link). A sheet asks for the title, your name,
 an optional link for it and the notes' language, shows the text as it will
 be submitted, and **Email it** opens the mail app with the guide addressed
-to splitopen@cyrve.com, along with the song, the file it would become
+to contribute@splitopen.fm, along with the song, the file it would become
 (`guides/<song id>/<slug>.yaml`) and its link; the maintainer adds the file.
-**Copy text** is for sending the guide some other way. A guide that is not yet in
-the library has an **Edit** button, which goes back to writing it.
-
-A guide travels in the link: `#songid&guide=<slug>` for one in the repo, or
-`guide=z…`, the deflated text, for one written in the player or by hand.
 
 Run locally with `python3 scripts/serve.py` (a static server that turns
 caching off, so a reload always gets the current files) and open
@@ -185,11 +105,14 @@ caching off, so a reload always gets the current files) and open
 The scripts need PyYAML and jsonschema 4.18 or later (`python3 -m pip install pyyaml 'jsonschema>=4.18'`);
 the workflows install them when the runner lacks them.
 
-The site is served by GitHub Pages from the `gh-pages` branch, which a
-workflow refreshes from `main` on every push. Each pull request gets a
-preview at `https://www.splitopen.fm/pr-preview/pr-<number>/`,
-linked from a comment on the PR and removed when it closes. Links to the
-old `/web/` path redirect to the root.
+## Unfurling
+
+The deploy workflows write song-specific unfurl images, plus a `404.html` that boots the player for a path with no file, with
+`scripts/song-pages.py`, and render the cards with `scripts/song-cards.py`
+(headless Chrome, from a template of the player). `s/` and `404.html` are
+gitignored, and `scripts/serve.py` renders the pages on the fly locally. The
+site's own card, `social.png`, is committed: rerun
+`python3 scripts/song-cards.py --site --only` after changing the template.
 
 ## License
 
