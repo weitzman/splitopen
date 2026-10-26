@@ -84,9 +84,11 @@ site's own card, `social.png`, is committed: rerun
 
 The site is static on GitHub Pages; the stems are not in the repo. They
 live in a Cloudflare R2 bucket (`splitopen`, under `songs/<id>/`) served
-at `https://pub-24e1ed6bc198435aa93f9f41227d48b5.r2.dev` (each song's `dir`), with a
-CORS policy that allows any origin to GET and exposes `Content-Length` (the
-loading bar reads it).
+at `https://stems.splitopen.fm` (each song's `dir`), the bucket's custom
+domain, which puts the files behind Cloudflare's cache; the bucket's r2.dev
+URL is rate-limited and is not used. The bucket has a CORS policy that
+allows any origin to GET and exposes `Content-Length` (the loading bar
+reads it).
 Uploads go through an rclone remote named `r2` with an R2 API token that
 can read and write the bucket:
 

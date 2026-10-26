@@ -61,7 +61,7 @@
           "type": "string",
           "pattern": "^(?:https?://\\S+|audio/songs/[\\w-]+)/$",
           "examples": [
-            "https://pub-24e1ed6bc198435aa93f9f41227d48b5.r2.dev/songs/1998-07-26-funky-bitch/",
+            "https://stems.splitopen.fm/songs/1998-07-26-funky-bitch/",
             "audio/songs/1998-07-26-funky-bitch/"
           ]
         },
