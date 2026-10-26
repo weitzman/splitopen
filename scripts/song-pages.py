@@ -1,44 +1,40 @@
 #!/usr/bin/env python3
-"""Writes a page per song under s/<id>/ that carries the song's link preview.
+"""Writes the player at s/<id>/ for every song, with the song's own link
+preview, and a 404 page that boots the player.
 
-The player keeps the song in the URL hash, which link unfurlers (Slack,
-iMessage, Twitter, Facebook) never send to the server, so a link straight to
-the player can only ever preview as "Split Open". Share hands out
-s/<id>/ instead (see songLink in app.js): a page whose Open Graph and
-Twitter tags name the song, band, date and venue (its image, card.png
-beside it, comes from scripts/song-cards.py), and whose script forwards
-the browser to the player at the site root, carrying the mix and moment from
-its hash. Nothing is lost on the way: s/<id>/#solo=keys&t=312 opens the
-player at #<id>&solo=keys&t=312.
+A song's address is s/<id>/ (see the URL state section of app.js): the page
+there is index.html with the song's title, band, date, venue and lineup in
+its Open Graph and Twitter tags and its card (scripts/song-cards.py) as the
+image, so a copied address unfurls as the song. A <base> after the charset
+points the page's relative URLs at the site root. The mix and the moment
+stay in the hash, which unfurlers never see.
 
-The pages are derived from songs.yaml and bands.yaml, so s/ is gitignored:
-the deploy workflows run this before publishing, and scripts/serve.py
-renders the same page on the fly for local testing.
+404.html is index.html with an absolute <base>, so a path GitHub Pages has
+no file for (a song id that is not in songs.yaml) still shows the player,
+which falls back to the first song.
 
-    python3 scripts/song-pages.py        # write s/<id>/index.html for every song
+The pages are derived from index.html, songs.yaml and bands.yaml, so s/ and
+404.html are gitignored: the deploy workflows run this before publishing,
+and scripts/serve.py renders the same pages on the fly.
+
+    python3 scripts/song-pages.py        # write s/<id>/index.html and 404.html
 """
 import html
 import os
 import re
 import shutil
-import sys
 
 import yaml12
 
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
 STEMS = ['guitar', 'bass', 'keys', 'drums', 'vocals', 'horns', 'flute']
 OUT = 's'
+BLOCK = re.compile(r'<!-- link preview:.*?-->\n(.*?)<!-- /link preview -->\n', re.S)
+CHARSET = '<meta charset="utf-8">\n'
 
-PAGE = """<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{title}</title>
+PREVIEW = """<title>{title}</title>
 <meta name="description" content="{description}">
 <link rel="canonical" href="{url}">
-<meta name="theme-color" content="#0b1026">
-<link rel="icon" href="../../favicon.svg" type="image/svg+xml">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Split Open">
 <meta property="og:title" content="{title}">
@@ -54,28 +50,20 @@ PAGE = """<!doctype html>
 <meta name="twitter:description" content="{description}">
 <meta name="twitter:image" content="{url}card.png">
 <meta name="twitter:image:alt" content="{alt}">
-<script>
-// Forward to the player, keeping the query and carrying this page's hash
-// (the mix and the moment) after the song id. replace() keeps this page out
-// of history, so Back leaves the player for wherever the link was.
-location.replace('../../' + location.search + '#{id}' + (location.hash.length > 1 ? '&' + location.hash.slice(1) : ''));
-</script>
-<style>
-body {{ margin: 0; min-height: 100vh; display: grid; place-items: center; background: #0b1026; color: #f4efe6; font: 400 18px/1.4 Inter, system-ui, sans-serif; text-align: center; }}
-h1 {{ font-size: 28px; margin: 0 0 8px; }}
-p {{ margin: 0 0 16px; color: #9aa0b8; }}
-a {{ color: #f2b134; }}
-</style>
-</head>
-<body>
-<main>
-<h1>{heading}</h1>
-<p>{line}</p>
-<p><a href="../../#{id}">Open in Split Open</a></p>
-</main>
-</body>
-</html>
 """
+
+
+def index():
+    with open(os.path.join(ROOT, 'index.html'), encoding='utf-8') as f:
+        text = f.read()
+    if not BLOCK.search(text) or CHARSET not in text:
+        raise SystemExit('song-pages: index.html has no link preview block to replace')
+    return text
+
+
+def based(text, base):
+    """index.html with a <base> so its relative URLs resolve at the site root."""
+    return text.replace(CHARSET, CHARSET + f'<base href="{html.escape(base, quote=True)}">\n', 1)
 
 
 def site_url():
@@ -110,18 +98,21 @@ def render(song, band, site):
     title = f"{song['title']} — {band['name']}, {song['date']}"
     place = f"{song['venue']}, {song['city']}"
     when = f"{song['date']}" + (f", {song['set']}" if song.get('set') else '')
-    description = (f"{band['name']} at {place}, {when}, split open: "
-                   f"mute, solo, and fade {join(lineup(song, band))}.")
+    who = join(lineup(song, band))
     fields = {
-        'id': song['id'],
         'title': title,
-        'heading': song['title'],
-        'line': f"{band['name']} · {place} · {when}",
-        'description': description,
+        'description': (f"{band['name']} at {place}, {when}, split open: "
+                        f"mute, solo, and fade {who}."),
         'url': f"{site}{OUT}/{song['id']}/",
-        'alt': f"Split Open playing {song['title']}: a strip each for {join(lineup(song, band))}",
+        'alt': f"Split Open playing {song['title']}: a strip each for {who}",
     }
-    return PAGE.format(**{k: html.escape(v, quote=True) for k, v in fields.items()})
+    preview = PREVIEW.format(**{k: html.escape(v, quote=True) for k, v in fields.items()})
+    return BLOCK.sub(lambda m: preview, based(index(), '../../'), count=1)
+
+
+def not_found(site):
+    """404.html: the player at any path, with the site's own preview."""
+    return based(index(), site)
 
 
 def page(song_id):
@@ -145,7 +136,9 @@ def main():
         os.makedirs(d)
         with open(os.path.join(d, 'index.html'), 'w', encoding='utf-8') as f:
             f.write(render(song, bands[song['band']], site))
-    print(f'{OUT}/: {len(songs)} song pages')
+    with open(os.path.join(ROOT, '404.html'), 'w', encoding='utf-8') as f:
+        f.write(not_found(site))
+    print(f'{OUT}/: {len(songs)} song pages, and 404.html')
 
 
 if __name__ == '__main__':

@@ -54,28 +54,33 @@ channel with mute, solo, and a fader, playing in sync.
 - `scripts/song-pages.py`, `scripts/song-cards.py` — the link previews; see
   Unfurling below.
 
-The URL hash holds the song and, optionally, the mix and the moment, so a
-link can reproduce both. The song id comes first; the rest are `&`-separated
-`key=value` pairs, all optional:
+A song's address is `s/<id>/`, and the hash holds the mix and the moment, so
+a link can reproduce both; the pairs are `&`-separated `key=value`, all
+optional:
 
-    #1998-07-26-funky-bitch&solo=keys&mute=vocals&g=guitar:0.8,bass:1.2&t=312
+    s/1998-07-26-funky-bitch/#solo=keys&mute=vocals&g=guitar:0.8,bass:1.2&t=312
 
 - `solo`, `mute` — comma-separated stem ids: `guitar`, `bass`, `keys`, `drums`, `vocals`, `horns`, `flute`
 - `g` — fader gains as `stem:value` pairs, 0 to 1.5 (1 is unity)
 - `t` — position in seconds; the player seeks there but waits for Play
 
-The player keeps the hash current as you mix and the Share button (or `L`)
-copies a link with the current position.
+The player keeps the address current as you mix (a mix change replaces the
+history entry, a song change adds one), and the Share button (or `L`) copies
+it with the current position. Older links that name the song first in the
+hash at the site root (`#1998-07-26-funky-bitch&solo=keys`) still load, and
+the address is rewritten to the song's page.
 
 ## Unfurling
 
-Unfurlers never see the hash, so Share hands out `s/<id>/` with the same pairs
-in its hash (`s/1998-07-26-funky-bitch/#solo=keys&t=312`): a page whose tags
-name the song and show its card, and which forwards to the player at
-`#<id>&solo=keys&t=312`. The deploy workflows write the pages with
-`scripts/song-pages.py` and render the cards with `scripts/song-cards.py`
-(headless Chrome, from a template of the player) into `s/`, which is
-gitignored; `scripts/serve.py` renders the pages on the fly locally. The
+Unfurlers never see the hash, which is why the song is in the path: the page
+at `s/<id>/` is `index.html` with the song's own title, description and card
+in its Open Graph and Twitter tags (the block `index.html` marks with
+`link preview` comments) and a `<base>` at the site root, so the address bar
+is a link that unfurls as the song. The deploy workflows write the pages,
+plus a `404.html` that boots the player for a path with no file, with
+`scripts/song-pages.py`, and render the cards with `scripts/song-cards.py`
+(headless Chrome, from a template of the player); `s/` and `404.html` are
+gitignored, and `scripts/serve.py` renders the pages on the fly locally. The
 site's own card, `social.png`, is committed: rerun
 `python3 scripts/song-cards.py --site --only` after changing the template.
 

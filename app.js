@@ -354,13 +354,23 @@ function applyMuteSolo() {
 
 // ---------- URL state ----------
 //
-// The hash names the song first, so older links still work, then carries the
-// mix and the moment as &-separated key=value pairs:
-//   #1998-07-26-funky-bitch&solo=keys&mute=vocals&g=guitar:0.8,bass:1.2&t=312
-// Keys at their defaults are left out, so an untouched mix is just #songid.
+// A song's address is s/<id>/ under the site root: the page there is the
+// player with that song's own link preview (scripts/song-pages.py), so the
+// address bar is a link worth copying. The hash carries the mix and the
+// moment as &-separated key=value pairs:
+//   s/1998-07-26-funky-bitch/#solo=keys&mute=vocals&g=guitar:0.8,bass:1.2&t=312
+// Keys at their defaults are left out, so an untouched mix has no hash.
 // guide= names a listening guide (see the guides section below).
-// The hash is rewritten with replaceState so Back still returns to the
-// previous song rather than stepping through every mute.
+// Older links name the song first in the hash at the site root
+// (#1998-07-26-funky-bitch&solo=keys); they still load, and the address is
+// rewritten to the song's page in place.
+// A mix change is written with replaceState and a song change with
+// pushState, so Back returns to the previous song rather than stepping
+// through every mute.
+
+// The site root, which every relative fetch and link resolves against: the
+// song pages carry a <base> pointing here.
+const SITE = new URL('.', document.baseURI);
 
 const GAIN_MAX = 1.5;
 let hashPos = null; // position (s) last written to the hash; null means none
@@ -396,9 +406,18 @@ function parseGains(val) {
   return gainsFrom(val.split(',').map(item => item.split(':')));
 }
 
-function parseHash() {
-  const [idPart, ...pairs] = location.hash.slice(1).split('&');
-  const state = { id: decodeURIComponent(idPart), solo: [], mute: [], gains: {}, t: null, guide: null };
+// The song id in the address: the s/<id>/ segment of the path, else the
+// first part of an older hash, which names the song without a key=value.
+function urlSongId() {
+  const m = location.pathname.match(/\/s\/([\w-]+)\/?$/);
+  if (m) return m[1];
+  const first = location.hash.slice(1).split('&')[0];
+  return first.includes('=') ? '' : decodeURIComponent(first);
+}
+
+function parseUrl() {
+  const pairs = location.hash.slice(1).split('&');
+  const state = { id: urlSongId(), solo: [], mute: [], gains: {}, t: null, guide: null };
   for (const pair of pairs) {
     const eq = pair.indexOf('=');
     if (eq < 0) continue;
@@ -444,25 +463,34 @@ function hashPairs() {
   return parts;
 }
 
-function buildHash() {
-  return '#' + [song.id, ...hashPairs()].join('&');
-}
-
-// A link to hand out: the song's own page at s/<id>/ (written by
-// scripts/song-pages.py), which carries the song's link preview and forwards
-// to the player with the given pairs after the song id. The player's own
-// address stays at the site root; only shared links take this form.
-function songLink(pairs) {
-  const url = new URL('s/' + song.id + '/', location.href);
+// The address of a song's page with the given pairs in its hash. The query
+// (?guide=1) is kept.
+function songUrl(id, pairs) {
+  const url = new URL('s/' + id + '/', SITE);
   url.search = location.search;
   url.hash = pairs.length ? '#' + pairs.join('&') : '';
   return url.href;
 }
 
+function songLink(pairs) {
+  return songUrl(song.id, pairs);
+}
+
+// Brings the address in line with the loaded song and the current mix.
+// 404.html carries an absolute <base>, so when it is opened from another
+// origin (a local server) the song's address is not ours to write.
 function writeHash() {
   if (!song || !channels.length) return;
-  const h = buildHash();
-  if (h !== location.hash) history.replaceState(null, '', h);
+  const href = songUrl(song.id, hashPairs());
+  if (href !== location.href && SITE.origin === location.origin) history.replaceState(null, '', href);
+}
+
+// Goes to another song: a new history entry at its page, then the load.
+function goToSong(id) {
+  const href = songUrl(id, []);
+  if (SITE.origin !== location.origin) { location.href = href; return; }
+  history.pushState(null, '', href);
+  loadSong(parseUrl());
 }
 
 // Position goes into the hash only on seek, pause, or Share, never from
@@ -900,7 +928,7 @@ function mediaSessionStep(dir) {
   const listed = listedSongs();
   if (!song || !listed.length) return;
   const i = listed.findIndex(s => s.id === song.id);
-  location.hash = listed[(i + dir + listed.length) % listed.length].id;
+  goToSong(listed[(i + dir + listed.length) % listed.length].id);
 }
 
 function mediaSessionMetadata() {
@@ -910,7 +938,7 @@ function mediaSessionMetadata() {
       title: song.title,
       artist: band.name,
       album: `${song.date} · ${song.venue}`,
-      artwork: [{ src: new URL('apple-touch-icon.png', location.href).href, sizes: '180x180', type: 'image/png' }],
+      artwork: [{ src: new URL('apple-touch-icon.png', SITE).href, sizes: '180x180', type: 'image/png' }],
     });
   } catch (_) { /* MediaMetadata unavailable */ }
 }
@@ -2290,7 +2318,7 @@ function renderSongList(filter = '') {
         ui.songSheet.close();
         if (song && s.id === song.id) return;
         if (!leaveDraftOk()) return;
-        location.hash = s.id;
+        goToSong(s.id);
       });
       list.appendChild(row);
     }
@@ -2342,7 +2370,7 @@ function wireSongPicker() {
   const n = listedSongs().length;
   document.getElementById('upnext-count').textContent = `All ${n} songs`;
   document.getElementById('upnext-song').addEventListener('click', () => {
-    if (upNext && leaveDraftOk()) location.hash = upNext.id;
+    if (upNext && leaveDraftOk()) goToSong(upNext.id);
   });
   document.getElementById('upnext-all').addEventListener('click', openSongPicker);
 }
@@ -2432,6 +2460,7 @@ async function loadSong(state) {
     keepWindow(segIndex(offset));
     fillBytes(token);
     syncGuide(state);
+    writeHash(); // an older #id link at the root becomes the song's page
     tipsSongReady();
     warmOtherSongs(song);
   } catch (err) {
@@ -2462,17 +2491,19 @@ async function loadSong(state) {
     return;
   }
   wireSongPicker();
-  const fromHash = () => loadSong(parseHash());
-  window.addEventListener('hashchange', () => {
-    // Our own replaceState writes never fire this, so it is a song click, a
-    // Back/Forward step, or a hand-edited URL. A same-song change only has
-    // to apply the mix; only a new song id loads stems.
-    const state = parseHash();
+  // Our own replaceState and pushState writes fire neither event, so this
+  // is a Back/Forward step or a hand-edited URL (which fires both; applying
+  // the same mix twice is harmless). A same-song change only has to apply
+  // the mix; only a new song id loads stems.
+  const fromUrl = () => {
+    const state = parseUrl();
     if (song && channels.length && findSong(state.id).id === song.id) {
       applyMixState(state);
       return syncGuide(state);
     }
-    fromHash();
-  });
-  fromHash();
+    loadSong(state);
+  };
+  window.addEventListener('popstate', fromUrl);
+  window.addEventListener('hashchange', fromUrl);
+  loadSong(parseUrl());
 })();
