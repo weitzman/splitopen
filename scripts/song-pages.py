@@ -96,13 +96,13 @@ def join(items):
 
 def render(song, band, site):
     title = f"{song['title']} — {band['name']}, {song['date']}"
-    place = f"{song['venue']}, {song['city']}"
-    when = f"{song['date']}" + (f", {song['set']}" if song.get('set') else '')
+    # The venue line as the player shows it under the title, then the slogan.
+    where = ' · '.join([song['date'], band.get('short_name') or band['name'],
+                        song['venue'], song['city']])
     who = join(lineup(song, band))
     fields = {
         'title': title,
-        'description': (f"{band['name']} at {place}, {when}, split open: "
-                        f"mute, solo, and fade {who}."),
+        'description': f"{where}. Split Open, to learn & appreciate.",
         'url': f"{site}{OUT}/{song['id']}/",
         'alt': f"Split Open playing {song['title']}: a strip each for {who}",
     }
