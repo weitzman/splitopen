@@ -30,6 +30,12 @@ jobs:
       - name: Index the guides
         run: python3 scripts/guides-index.py
 
+      - name: Write the song pages, which carry each song's link preview
+        run: python3 scripts/song-pages.py
+
+      - name: Render each song's preview card with the runner's Chrome
+        run: python3 scripts/song-cards.py
+
       - name: Deploy preview
         uses: rossjrw/pr-preview-action@v1
         with:

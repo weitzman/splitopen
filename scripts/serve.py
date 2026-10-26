@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Static server for local development that tells the browser not to cache.
+"""Static server for local development that tells the browser not to cache,
+and renders the song pages under s/ on the fly.
 
 python3 -m http.server sends no Cache-Control header, so Chrome caches app.js
 and styles.css heuristically and a plain reload can run stale code. This
@@ -8,11 +9,33 @@ serves the repo root the same way, with caching off.
     python3 scripts/serve.py [port]
 """
 import os
+import re
 import sys
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 
+SONG_PAGE = re.compile(r'^/s/([\w-]+)/?(?:[?#].*)?$')
+
 
 class NoCacheHandler(SimpleHTTPRequestHandler):
+    def do_GET(self):
+        # The song pages under s/ (scripts/song-pages.py) are derived and
+        # not in the repo; render them here so Share links work locally.
+        m = SONG_PAGE.match(self.path)
+        if m:
+            import importlib
+            page = importlib.import_module('song-pages').page(m.group(1))
+            if page is None:
+                self.send_error(404, 'no such song')
+                return
+            body = page.encode('utf-8')
+            self.send_response(200)
+            self.send_header('Content-Type', 'text/html; charset=utf-8')
+            self.send_header('Content-Length', str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+        super().do_GET()
+
     def end_headers(self):
         self.send_header('Cache-Control', 'no-store')
         super().end_headers()

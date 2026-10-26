@@ -51,9 +51,8 @@ channel with mute, solo, and a fader, playing in sync.
   every segment of the song's stems at the song's `dir` URL (a HEAD request
   each). A pull request that breaks either fails its "Check data"
   workflow, and a merged one fails the deploy.
-- `scripts/social-card.html` — source for `social.png`, the link-preview image.
-  Regenerate after editing it with headless Chrome:
-  `"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless=new --hide-scrollbars --virtual-time-budget=8000 --window-size=1200,630 --screenshot=social.png file://$PWD/scripts/social-card.html`
+- `scripts/song-pages.py`, `scripts/song-cards.py` — the link previews; see
+  Unfurling below.
 
 The URL hash holds the song and, optionally, the mix and the moment, so a
 link can reproduce both. The song id comes first; the rest are `&`-separated
@@ -66,7 +65,19 @@ link can reproduce both. The song id comes first; the rest are `&`-separated
 - `t` — position in seconds; the player seeks there but waits for Play
 
 The player keeps the hash current as you mix and the Share button (or `L`)
-copies it with the current position.
+copies a link with the current position.
+
+## Unfurling
+
+Unfurlers never see the hash, so Share hands out `s/<id>/` with the same pairs
+in its hash (`s/1998-07-26-funky-bitch/#solo=keys&t=312`): a page whose tags
+name the song and show its card, and which forwards to the player at
+`#<id>&solo=keys&t=312`. The deploy workflows write the pages with
+`scripts/song-pages.py` and render the cards with `scripts/song-cards.py`
+(headless Chrome, from a template of the player) into `s/`, which is
+gitignored; `scripts/serve.py` renders the pages on the fly locally. The
+site's own card, `social.png`, is committed: rerun
+`python3 scripts/song-cards.py --site --only` after changing the template.
 
 ## Hosting
 

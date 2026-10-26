@@ -430,8 +430,9 @@ function mixState() {
   };
 }
 
-function buildHash() {
-  const parts = [song.id];
+// The key=value pairs after the song id: the mix, the moment, the guide.
+function hashPairs() {
+  const parts = [];
   const { solo, mute, gains } = mixState();
   const gainList = Object.entries(gains).map(([id, g]) => id + ':' + g);
   if (solo.length) parts.push('solo=' + solo.join(','));
@@ -440,7 +441,22 @@ function buildHash() {
   const t = Math.round(hashPos || 0);
   if (t > 0) parts.push('t=' + t);
   if (guideParam) parts.push('guide=' + guideParam);
-  return '#' + parts.join('&');
+  return parts;
+}
+
+function buildHash() {
+  return '#' + [song.id, ...hashPairs()].join('&');
+}
+
+// A link to hand out: the song's own page at s/<id>/ (written by
+// scripts/song-pages.py), which carries the song's link preview and forwards
+// to the player with the given pairs after the song id. The player's own
+// address stays at the site root; only shared links take this form.
+function songLink(pairs) {
+  const url = new URL('s/' + song.id + '/', location.href);
+  url.search = location.search;
+  url.hash = pairs.length ? '#' + pairs.join('&') : '';
+  return url.href;
 }
 
 function writeHash() {
@@ -1033,7 +1049,7 @@ async function decodeGuide(param) {
 window.SplitOpen = {
   async guideLink(text) {
     if (!song) throw new Error('load a song first');
-    return location.href.split('#')[0] + '#' + song.id + '&guide=' + await encodeGuide(text);
+    return songLink(['guide=' + await encodeGuide(text)]);
   },
 };
 
@@ -1841,7 +1857,7 @@ async function submitOffer(e) {
   ui.offerSheet.close();
   let notice = `Send the email your mail app opened, to ${OFFER_EMAIL}. The guide stays in this link meanwhile.`;
   await offerSent(draft, text, notice);
-  const link = location.href.split('#')[0] + '#' + song.id + '&guide=' + guide.param;
+  const link = songLink(['guide=' + guide.param]);
   const head = `A guide for ${song.title}, for the library.\n\nSong: ${song.id}\nFile: guides/${song.id}/${slug}.yaml\nLink: ${link}\n\n`;
   let url = offerMailUrl(draft, head + text);
   if (url.length > OFFER_MAIL_MAX) {
@@ -2184,7 +2200,7 @@ async function shareLink() {
   if (!channels.length) return;
   tipsShared();
   writePosition();
-  const url = location.href;
+  const url = songLink(hashPairs());
   if (navigator.share) {
     try {
       await navigator.share({ title: document.title, url });

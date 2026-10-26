@@ -5,3 +5,6 @@ audio/src/
 audio/stems/
 audio/songs/
 .DS_Store
+# Song pages are derived from songs.yaml by scripts/song-pages.py at deploy
+# time; scripts/serve.py renders them on the fly locally.
+s/
