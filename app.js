@@ -526,26 +526,31 @@ function updateHints() {
 
 // ---------- tips ----------
 //
-// A three-line tour for a new listener, one tip at a time in the line under
+// A four-line tour for a new listener, one tip at a time in the line under
 // the transport: Play, a few seconds after the first song is ready; Solo, a
 // few seconds into playback (skipped if they have ever used solo or mute,
 // remembered in localStorage like the S-button glow, or a link or guide set
-// the mix); and the song picker half a minute after that, which opens it
-// when clicked and fades out on its own after ten seconds. Pressing Play
-// retires the first tip, pressing S or M the second, and changing songs
-// ends the tour early, since they've found everything.
+// the mix); Share, a while after that; and the song picker, which fades out
+// on its own after ten seconds. Play, Share and Change songs are links that
+// do the thing they name. Pressing Play retires the first tip, pressing S or
+// M the second, sharing the third, and changing songs ends the tour early,
+// since they've found everything.
 
 const TIP_LOAD_DELAY = 3000;   // song ready -> Play tip
 const TIP_PLAY_DELAY = 4000;   // playing -> Solo tip
-const TIP_SONGS_DELAY = 30000; // Solo tip -> songs tip
+const TIP_SHARE_DELAY = 20000; // Solo tip -> Share tip
+const TIP_SONGS_DELAY = 15000; // Share tip -> songs tip
 const TIP_SONGS_LINGER = 10000; // songs tip -> gone
 const TIP_FADE = 600;          // matches the CSS transition
+const PLAY_GLYPH = '<svg class="tip-glyph" viewBox="0 0 24 24" aria-hidden="true" fill="currentColor"><path d="M7 4l14 8-14 8z"/></svg>';
+const SHARE_GLYPH = '<svg class="tip-glyph" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 10H6.5A1.5 1.5 0 0 0 5 11.5v8A1.5 1.5 0 0 0 6.5 21h11a1.5 1.5 0 0 0 1.5-1.5v-8a1.5 1.5 0 0 0-1.5-1.5H16"/><path d="M12 15V3M8 7l4-4 4 4"/></svg>';
 const TIPS = {
-  play: 'Press <em>Play</em>, and soak in sound',
+  play: `Press <button type="button" class="tip-link" data-act="play">Play${PLAY_GLYPH}</button>, and soak in sound`,
   solo: 'Click <em>Solo</em>, and smile',
-  songs: '<button type="button" class="tip-link">Change songs</button>, as you wish',
+  share: `Press <button type="button" class="tip-link" data-act="share">Share${SHARE_GLYPH}</button> to send a link`,
+  songs: '<button type="button" class="tip-link" data-act="songs">Change songs</button>, as you wish',
 };
-let tipStage = 'load'; // load -> play -> solo -> songs -> done
+let tipStage = 'load'; // load -> play -> solo -> share -> songs -> done
 let tipTimer = null;
 let tipShown = null;   // key of the tip on screen, or null
 let tipSwap = null;
@@ -592,29 +597,47 @@ function tipsPlaying(on) {
 function tipsSolo() {
   const mixing = channels.some(c => c.solo || c.mute);
   if (!mixing && !mixUsed()) showTip('solo');
-  tipStage = 'songs';
-  tipTimer = setTimeout(() => {
-    tipStage = 'done';
-    showTip('songs');
-    tipTimer = setTimeout(() => showTip(null), TIP_SONGS_LINGER);
-  }, TIP_SONGS_DELAY);
+  tipStage = 'share';
+  tipTimer = setTimeout(tipsShare, TIP_SHARE_DELAY);
 }
 
-// The songs tip is a link to the picker.
+function tipsShare() {
+  showTip('share');
+  tipStage = 'songs';
+  tipTimer = setTimeout(tipsSongs, TIP_SONGS_DELAY);
+}
+
+function tipsSongs() {
+  tipStage = 'done';
+  showTip('songs');
+  tipTimer = setTimeout(() => showTip(null), TIP_SONGS_LINGER);
+}
+
+// A tip's link does what its button would: Play plays, Share shares (inside
+// the click, as the share sheet requires), Change songs opens the picker.
+// The tour keeps its clock; only the songs tip, the last, ends it.
 function wireTips() {
   ui.tip = document.getElementById('tip');
   ui.tipText = document.getElementById('tip-text');
   ui.tipText.addEventListener('click', e => {
-    if (!e.target.closest('.tip-link')) return;
-    clearTimeout(tipTimer);
+    const link = e.target.closest('.tip-link');
+    if (!link) return;
+    const act = link.dataset.act;
     showTip(null);
-    openSongPicker();
+    if (act === 'play') { if (!playing) play(); }
+    else if (act === 'share') shareLink();
+    else if (act === 'songs') { clearTimeout(tipTimer); openSongPicker(); }
   });
 }
 
 // S or M was pressed: the Solo tip has done its job.
 function tipsMixUsed() {
   if (tipShown === 'solo') showTip(null);
+}
+
+// Share was pressed, or L: the Share tip has done its job.
+function tipsShared() {
+  if (tipShown === 'share') showTip(null);
 }
 
 // The listener picked another song: nothing left to point out.
@@ -2153,6 +2176,7 @@ function copyViaSelection(text) {
 let shareTimer = null;
 async function shareLink() {
   if (!channels.length) return;
+  tipsShared();
   writePosition();
   const url = location.href;
   if (navigator.share) {

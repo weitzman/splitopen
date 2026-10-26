@@ -866,6 +866,12 @@ li.looping .icon.loop { background: var(--gold); border-color: var(--gold); colo
   cursor: pointer;
 }
 .tip-link:hover { color: var(--text); }
+.tip-link .tip-glyph {
+  width: 14px;
+  height: 14px;
+  margin-left: 5px;
+  vertical-align: -2px;
+}
 /* On phones the transport is fixed to the bottom, so the tip floats just
    above it instead of sitting in the flow underneath. */
 @media (max-width: 720px) {
