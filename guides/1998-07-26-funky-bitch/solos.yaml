@@ -1,3 +1,4 @@
+# yaml-language-server: $schema=../../schemas/guide.schema.json
 title: Solos
 lang: en
 by: Moshe Weitzman

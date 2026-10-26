@@ -1,0 +1,98 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://weitzman.github.io/splitopen/schemas/songs.schema.json",
+  "title": "Split Open songs",
+  "description": "songs.yaml: the songs in the player, in picker order. See README.md. The checks scripts/check-songs.py adds beyond this schema: the id is unique, the band is in bands.yaml, the date is a real date, dir ends with /<id>/ and holds meta.json and every segment of the song's stems.",
+  "type": "array",
+  "items": {
+    "$ref": "#/$defs/song"
+  },
+  "$defs": {
+    "song": {
+      "type": "object",
+      "required": [
+        "id",
+        "band",
+        "title",
+        "date",
+        "venue",
+        "city",
+        "source",
+        "dir"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "description": "The song's id: the first part of the URL hash, the name of its directory in the bucket and of its folder under guides/. By convention <date>-<title slug>.",
+          "$ref": "common.schema.json#/$defs/slug"
+        },
+        "band": {
+          "description": "The band's key in bands.yaml, whose lineup gives the song its stems.",
+          "$ref": "common.schema.json#/$defs/slug"
+        },
+        "title": {
+          "$ref": "common.schema.json#/$defs/text"
+        },
+        "date": {
+          "description": "The date of the show, YYYY-MM-DD. Kept as a string: in YAML 1.2, which the player reads, 1998-07-26 is text.",
+          "type": "string",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "examples": [
+            "1998-07-26"
+          ]
+        },
+        "set": {
+          "description": "The set the song is from (Set I, Set II, Encore), if known.",
+          "$ref": "common.schema.json#/$defs/text"
+        },
+        "venue": {
+          "$ref": "common.schema.json#/$defs/text"
+        },
+        "city": {
+          "description": "City and state or country, as in Dallas, TX.",
+          "$ref": "common.schema.json#/$defs/text"
+        },
+        "source": {
+          "description": "The page the recording came from, usually an archive.org item; the date in the venue line links to it.",
+          "$ref": "common.schema.json#/$defs/url"
+        },
+        "dir": {
+          "description": "Where the stems are: the song's directory URL in the bucket, or audio/songs/<id>/ for a local copy, with a trailing slash.",
+          "type": "string",
+          "pattern": "^(?:https?://\\S+|audio/songs/[\\w-]+)/$",
+          "examples": [
+            "https://pub-24e1ed6bc198435aa93f9f41227d48b5.r2.dev/songs/1998-07-26-funky-bitch/",
+            "audio/songs/1998-07-26-funky-bitch/"
+          ]
+        },
+        "hidden": {
+          "description": "true keeps the song out of the picker; it still plays from a direct link.",
+          "type": "boolean"
+        },
+        "channels": {
+          "description": "Changes to the band's lineup for the night: per stem, a new who and/or inst. A stem the band lacks can be added here with both.",
+          "type": "object",
+          "propertyNames": {
+            "$ref": "common.schema.json#/$defs/stem"
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/channel"
+          }
+        }
+      }
+    },
+    "channel": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": false,
+      "properties": {
+        "who": {
+          "$ref": "common.schema.json#/$defs/text"
+        },
+        "inst": {
+          "$ref": "common.schema.json#/$defs/text"
+        }
+      }
+    }
+  }
+}

@@ -18,8 +18,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install PyYAML, which the scripts read the data files with
-        run: python3 -c 'import yaml' 2>/dev/null || python3 -m pip install pyyaml
+      - name: Install PyYAML and jsonschema, which the scripts check the data files with
+        run: python3 -c 'import yaml, jsonschema, referencing' 2>/dev/null || python3 -m pip install pyyaml jsonschema
 
       - name: Check the songs and bands
         run: python3 scripts/check-songs.py
