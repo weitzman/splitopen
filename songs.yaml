@@ -1,3 +1,4 @@
+# yaml-language-server: $schema=schemas/songs.schema.json
 # The songs in the player, in picker order; see README.md for the fields.
 # scripts/add-song.sh appends an entry after encoding and uploading the stems.
 - id: 1998-07-26-funky-bitch

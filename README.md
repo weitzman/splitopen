@@ -34,12 +34,21 @@ channel with mute, solo, and a fader, playing in sync.
   holds every wind instrument and (for some bands) the organ, between
   `horns`, `keys` and `flute`, guided by the stems of ZFTurbo's 53-stem MVSep
   Mega model (see the script for how to run it)
+- `schemas/` — JSON Schemas (draft 2020-12) for the YAML files:
+  `songs.schema.json`, `bands.schema.json` and `guide.schema.json`, sharing
+  `common.schema.json` (the stem list and the common string kinds). They
+  are published with the site at `https://weitzman.github.io/splitopen/schemas/`,
+  and each YAML file's first line is a `# yaml-language-server: $schema=`
+  comment pointing at its schema, so an editor with a YAML language server
+  (VS Code's YAML extension, for one) completes the fields and marks
+  mistakes as you type. The check scripts apply the same schemas through
+  `scripts/schema.py`, so the rules live in one place.
 - `scripts/check-songs.py` — checks `songs.yaml` and `bands.yaml` strictly,
-  as the player reads them: every field present and of the right kind, no
-  unknown fields, the band in `bands.yaml`, the date a date, `meta.json` and
-  every segment of the song's stems at the song's `dir` URL (a HEAD request
-  each). A pull request that breaks either fails its "Check data"
-  workflow, and a merged one fails the deploy.
+  as the player reads them: their schemas (every field present and of the
+  right kind, no unknown fields), then the band in `bands.yaml`, the date a
+  real date, `meta.json` and every segment of the song's stems at the song's
+  `dir` URL (a HEAD request each). A pull request that breaks either fails
+  its "Check data" workflow, and a merged one fails the deploy.
 - `scripts/social-card.html` — source for `social.png`, the link-preview image.
   Regenerate after editing it with headless Chrome:
   `"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless=new --hide-scrollbars --virtual-time-budget=8000 --window-size=1200,630 --screenshot=social.png file://$PWD/scripts/social-card.html`
@@ -124,7 +133,8 @@ Guides are written as YAML:
   `url` (a link for the author's name) and `tips`.
 - A tip has `at` (`m:ss`, with tenths if wanted: `1:05.5`), then any of `to`
   (where the tip ends; without it, at the next tip), `solo` and `mute` (a
-  player or a list of players: `guitar`, `bass`, `keys`, `drums`, `vocals`),
+  player or a list of players: `guitar`, `bass`, `keys`, `drums`, `vocals`,
+  `horns`, `flute`),
   `gain` (a map of player to fader level, 0 to 1.5), `pause` and `note`. A
   later tip may start before the one before it ends, which is how a passage
   is replayed.
@@ -135,7 +145,9 @@ Guides are written as YAML:
 Guides kept in the repo live at `guides/<song id>/<slug>.yaml` in the form
 above, listed by slug under the song id in `guides.json`; they appear as
 pills under the song and open with `guide=<slug>`. `guides.json` is derived
-from the files. .
+from the files: the deploy workflows regenerate it, and
+`python3 scripts/guides-index.py` checks every guide against
+`schemas/guide.schema.json` and rewrites it locally.
 
 To offer a guide to the library, press **Contribute** on a guide you wrote
 (or one that reached you by link). A sheet asks for the title, your name,
@@ -152,8 +164,8 @@ A guide travels in the link: `#songid&guide=<slug>` for one in the repo, or
 Run locally with `python3 scripts/serve.py` (a static server that turns
 caching off, so a reload always gets the current files) and open
 `http://localhost:8765/`. Any static server from the repo root works too.
-The scripts need PyYAML (`python3 -m pip install pyyaml`); the workflows
-install it when the runner lacks it.
+The scripts need PyYAML and jsonschema 4.18 or later (`python3 -m pip install pyyaml 'jsonschema>=4.18'`);
+the workflows install them when the runner lacks them.
 
 The site is served by GitHub Pages from the `gh-pages` branch, which a
 workflow refreshes from `main` on every push. Each pull request gets a
