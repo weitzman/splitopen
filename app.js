@@ -361,9 +361,6 @@ function applyMuteSolo() {
 //   s/1998-07-26-funky-bitch/#solo=keys&mute=vocals&g=guitar:0.8,bass:1.2&t=312
 // Keys at their defaults are left out, so an untouched mix has no hash.
 // guide= names a listening guide (see the guides section below).
-// Older links name the song first in the hash at the site root
-// (#1998-07-26-funky-bitch&solo=keys); they still load, and the address is
-// rewritten to the song's page in place.
 // A mix change is written with replaceState and a song change with
 // pushState, so Back returns to the previous song rather than stepping
 // through every mute.
@@ -406,13 +403,11 @@ function parseGains(val) {
   return gainsFrom(val.split(',').map(item => item.split(':')));
 }
 
-// The song id in the address: the s/<id>/ segment of the path, else the
-// first part of an older hash, which names the song without a key=value.
+// The song id in the address: the s/<id>/ segment of the path. The site
+// root and any other path (404.html) have none, so the first song loads.
 function urlSongId() {
   const m = location.pathname.match(/\/s\/([\w-]+)\/?$/);
-  if (m) return m[1];
-  const first = location.hash.slice(1).split('&')[0];
-  return first.includes('=') ? '' : decodeURIComponent(first);
+  return m ? m[1] : '';
 }
 
 function parseUrl() {
@@ -2460,7 +2455,7 @@ async function loadSong(state) {
     keepWindow(segIndex(offset));
     fillBytes(token);
     syncGuide(state);
-    writeHash(); // an older #id link at the root becomes the song's page
+    writeHash(); // the root and 404.html become the song's page
     tipsSongReady();
     warmOtherSongs(song);
   } catch (err) {

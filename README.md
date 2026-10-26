@@ -64,9 +64,7 @@ optional:
 
 The player keeps the address current as you mix (a mix change replaces the
 history entry, a song change adds one), and the Share button (or `L`) copies
-it with the current position. Older links that name the song first in the
-hash at the site root (`#1998-07-26-funky-bitch&solo=keys`) still load, and
-the address is rewritten to the song's page.
+it with the current position.
 
 ## Unfurling
 
