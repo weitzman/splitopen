@@ -54,3 +54,15 @@ tedeschi-trucks-band:
     drums: {who: Tyler & JJ, inst: Drums}
     vocals: {who: Vocals, inst: Larynx}
     horns: {who: Horns, inst: Sax/Trumpet/Bone}
+
+# The 2023 four-piece. The band id is the short form of the name, not the
+# slug add-song.sh would derive, so pass --band "Cosmic Country" there.
+cosmic-country:
+  name: Daniel Donato's Cosmic Country
+  short_name: Cosmic Country
+  channels:
+    guitar: {who: Daniel, inst: Guitar}
+    bass: {who: Will, inst: Bass}
+    keys: {who: Nathan, inst: Keys}
+    drums: {who: Noah, inst: Drums}
+    vocals: {who: Vocals, inst: Larynx}
