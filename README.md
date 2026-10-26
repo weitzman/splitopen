@@ -1,38 +1,27 @@
-# Split Open
+# Introdution
 
-Our favorite songs, [Split Open](https://weitzman.github.io/splitopen) so we can learn and appreciate.
+Our favorite songs, [Split Open](https://weitzman.github.io/splitopen) so we can learn and appreciate. Solo the keys during a particularly pretty passage, or mute the guitar so you can play that part. My dream for this project is for bands to take my code (its freely available) and offer this player as a service to their fans. I'm available to help. My email is weitzman@tejasa.com.
 
-A stem mixer for live recordings: each band member on a separate
+
+# Technology
+
+Split Open is a stem mixer for live recordings: each band member on a separate
 channel with mute, solo, and a fader, playing in sync.
 
 - `index.html`, `app.js`, `styles.css`, `songs.yaml`, `bands.yaml` — the player
   (static HTML + Web Audio API, no build step), served from the repo root.
-  The data files are YAML, read in the browser by `vendor/js-yaml.min.js`
-  (js-yaml 4.1.0) with its core schema, and by the scripts with PyYAML
-  through `scripts/yaml12.py`, which gives PyYAML the same YAML 1.2 reading:
-  `0:30` and `1998-07-26` are strings, `yes` is a word, only `true` and
-  `false` are booleans.
+  The data files are YAML.
+
 - A song directory (the song's `dir` in `songs.yaml`, under `songs/<id>/` in
   the bucket, see Hosting) holds the song's stems (any of guitar, bass, keys,
   drums, vocals, horns, flute), each a directory of 10-second Opus segments
   (128 kbps, Ogg container), plus a `meta.json` with the song's length and
   the segment grid. The player decodes a few segments ahead of the playhead
   and keeps decoded audio within a memory budget, so a song starts in under
-  a second
+  a second.
 - A song in `songs.yaml` names its band, whose lineup comes from `bands.yaml`
   (`who` and `inst` per stem: guitar, bass, keys, drums, vocals, horns,
-  flute). A band lists only the stems it has; a string band with no keys or
-  drums leaves them out, a band with a horn section adds `horns`, and the
-  player shows and fetches just those. The line under the song title reads
-  date, band, venue, city; a band with a `short_name` (`TTB`) shows that
-  there instead of its `name`. A song can
-  override any of those for the night, since lineups change: a `channels`
-  map on the song with the stems to change, e.g.
-  `channels: {keys: {who: Page & Medeski}, guitar: {inst: Guitars}}`. A
-  stem the band lacks can be added the same way, with both `who` and `inst`.
-  Its `source` is the archive.org item page the recording came from. A
-  song with `hidden: true` stays out of the picker but still plays from a
-  direct link.
+  flute). 
 - `scripts/add-song.sh` — download a FLAC from archive.org, separate it with
   BS-Roformer-SW (`audio-separator`), encode the stems, upload them, register
   the song in `songs.yaml`
@@ -87,9 +76,7 @@ immutable cache header on segments and an hour on `meta.json`.
 
 ## Guides
 
-The **Guides** row under the song title is shown only with `?guide=1` in
-the query string (before the hash) while the feature settles; a guide in
-the link still opens without it.
+Guides is an experimental feature which is not yet shown by default. The **Guides** row under the song title is shown only with `?guide=1` in the query string (before the hash).
 
 A guide is a listening tour of a song: an ordered list of tips, each a
 passage, a mix, and a note. The mix holds for the passage and the band plays
@@ -97,10 +84,9 @@ in full between tips; when the playhead reaches a tip its note is shown.
 
 To write one, press **+ New guide** under the song title, play the song, set mute/solo, and press `N` (or
 **Tip: Start**) where a passage worth a tip begins. The tip takes that
-moment and the mix in force, and runs to the next tip unless given an end.
+moment and the current mix, and runs to the next tip unless given an end.
 The list shows one line per tip with edit, play and delete; edit opens that
-tip alone, with its start, optional end and description, and a play button
-that loops the passage. Start and end are set from the playhead: scrub or
+tip alone, with its start, optional end and description. Start and end are set from the playhead: scrub or
 play to the moment, then press Set. Tapping the mix label opens a sheet with
 Mute and Solo per player, heard as you choose. Tips can be dragged into another order
 by their handle. The list is always saved: the draft is kept in the link as it
@@ -149,13 +135,7 @@ Guides are written as YAML:
 Guides kept in the repo live at `guides/<song id>/<slug>.yaml` in the form
 above, listed by slug under the song id in `guides.json`; they appear as
 pills under the song and open with `guide=<slug>`. `guides.json` is derived
-from the files: the deploy workflows regenerate it before publishing, and
-`python3 scripts/guides-index.py` rewrites it locally (`--lint` only
-checks the guides, `--check` also tells whether `guides.json` is current).
-The script parses every guide strictly, as the player would, and fails on
-a file that is not YAML, an unknown player or key, a field of the wrong
-kind, a missing title or a folder that is not a song id: a pull request with a broken guide fails its
-"Check data" workflow, and a merged one fails the deploy.
+from the files. .
 
 To offer a guide to the library, press **Contribute** on a guide you wrote
 (or one that reached you by link). A sheet asks for the title, your name,
@@ -163,21 +143,11 @@ an optional link for it and the notes' language, shows the text as it will
 be submitted, and **Email it** opens the mail app with the guide addressed
 to splitopen@cyrve.com, along with the song, the file it would become
 (`guides/<song id>/<slug>.yaml`) and its link; the maintainer adds the file.
-**Copy text** is for sending the guide some other way. The title, name and
-link are written into the guide's link as well. A guide that is not yet in
+**Copy text** is for sending the guide some other way. A guide that is not yet in
 the library has an **Edit** button, which goes back to writing it.
 
 A guide travels in the link: `#songid&guide=<slug>` for one in the repo, or
-`guide=z…`, the deflated text, for one written in the player or by hand. To
-make such a link by hand, open the song, then in the browser console:
-
-    await SplitOpen.guideLink(`title: ...
-    tips:
-      - at: 0:00
-        solo: [drums]
-        note: ...`)
-
-A dozen tips with a sentence each come to about a kilobyte of link.
+`guide=z…`, the deflated text, for one written in the player or by hand.
 
 Run locally with `python3 scripts/serve.py` (a static server that turns
 caching off, so a reload always gets the current files) and open
@@ -195,6 +165,3 @@ old `/web/` path redirect to the root.
 
 The code and documentation in this repository are released under the
 [MIT License](LICENSE).
-
-The audio stems under `audio/songs/` are not covered by this license. They
-are derived from recordings whose copyright remains with their owners.
