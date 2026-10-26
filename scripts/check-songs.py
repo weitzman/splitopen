@@ -52,34 +52,47 @@ def load(name, errors):
     return None
 
 
+def fetch(url, method='GET'):
+    """Opens a URL. The public bucket host rate-limits bursts with 429s, so
+    those (and server errors) are retried with a growing pause; any other
+    HTTP error is raised at once, and the last error after six tries."""
+    for attempt in range(6):
+        try:
+            return urllib.request.urlopen(urllib.request.Request(url, method=method, headers=HEADERS), timeout=30)
+        except urllib.error.HTTPError as e:
+            if e.code != 429 and e.code < 500:
+                raise
+            error = e
+        except OSError as e:
+            error = e
+        time.sleep(0.5 * 2 ** attempt)
+    raise error
+
+
 def read_meta(d):
     if URL.match(d):
-        with urllib.request.urlopen(urllib.request.Request(d + 'meta.json', headers=HEADERS), timeout=30) as r:
+        with fetch(d + 'meta.json') as r:
             return json.load(r)
     with open(os.path.join(ROOT, d, 'meta.json'), encoding='utf-8') as f:
         return json.load(f)
 
 
 def present(d, name):
-    """Whether a file under `dir` exists and is not empty. The public bucket
-    host rate-limits bursts with 429s, so those (and server errors) are
-    retried with a growing pause; only a clear answer counts."""
+    """Whether a file under `dir` exists and is not empty. Only a clear
+    answer counts: a 404, or a host still answering 429 or 5xx after the
+    retries in fetch, is a missing file."""
     if not URL.match(d):
         p = os.path.join(ROOT, d, name)
         return os.path.isfile(p) and os.path.getsize(p) > 0
-    for attempt in range(6):
-        try:
-            with urllib.request.urlopen(urllib.request.Request(d + name, method='HEAD', headers=HEADERS), timeout=30) as r:
-                return r.status == 200 and r.headers.get('Content-Length') != '0'
-        except urllib.error.HTTPError as e:
-            if e.code == 404:
-                return False
-            if e.code != 429 and e.code < 500:
-                raise
-        except OSError:
-            pass
-        time.sleep(0.5 * 2 ** attempt)
-    return False
+    try:
+        with fetch(d + name, method='HEAD') as r:
+            return r.status == 200 and r.headers.get('Content-Length') != '0'
+    except urllib.error.HTTPError as e:
+        if e.code == 404 or e.code == 429 or e.code >= 500:
+            return False
+        raise
+    except OSError:
+        return False
 
 
 def check_stems(d, where, errors, stems):

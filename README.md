@@ -1,6 +1,6 @@
 # Introdution
 
-Our favorite songs, [Split Open](https://weitzman.github.io/splitopen) so we can learn and appreciate. Solo the keys during a particularly pretty passage, or mute the guitar so you can play that part. My dream for this project is for bands to take my code (its freely available) and offer this player as a service to their fans. I'm available to help. My email is weitzman@tejasa.com.
+Our favorite songs, [Split Open](https://www.splitopen.fm) so we can learn and appreciate. Solo the keys during a particularly pretty passage, or mute the guitar so you can play that part. My dream for this project is for bands to take my code (its freely available) and offer this player as a service to their fans. I'm available to help. My email is weitzman@tejasa.com.
 
 
 # Technology
@@ -34,11 +34,13 @@ channel with mute, solo, and a fader, playing in sync.
   holds every wind instrument and (for some bands) the organ, between
   `horns`, `keys` and `flute`, guided by the stems of ZFTurbo's 53-stem MVSep
   Mega model (see the script for how to run it)
-- `schemas/` — JSON Schemas (draft 2020-12) for the YAML files:
-  `songs.schema.json`, `bands.schema.json` and `guide.schema.json`, sharing
-  `common.schema.json` (the stem list and the common string kinds). They
-  are published with the site at `https://weitzman.github.io/splitopen/schemas/`,
-  and each YAML file's first line is a `# yaml-language-server: $schema=`
+- `schemas/` — JSON Schemas (draft 2020-12) for the YAML files, published
+  with the site:
+  [songs.schema.json](https://www.splitopen.fm/schemas/songs.schema.json),
+  [bands.schema.json](https://www.splitopen.fm/schemas/bands.schema.json) and
+  [guide.schema.json](https://www.splitopen.fm/schemas/guide.schema.json),
+  sharing `common.schema.json` (the stem list and the common string kinds).
+  Each YAML file's first line is a `# yaml-language-server: $schema=`
   comment pointing at its schema, so an editor with a YAML language server
   (VS Code's YAML extension, for one) completes the fields and marks
   mistakes as you type. The check scripts apply the same schemas through
@@ -183,7 +185,7 @@ the workflows install them when the runner lacks them.
 
 The site is served by GitHub Pages from the `gh-pages` branch, which a
 workflow refreshes from `main` on every push. Each pull request gets a
-preview at `https://weitzman.github.io/splitopen/pr-preview/pr-<number>/`,
+preview at `https://www.splitopen.fm/pr-preview/pr-<number>/`,
 linked from a comment on the PR and removed when it closes. Links to the
 old `/web/` path redirect to the root.
 

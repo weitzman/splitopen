@@ -1,5 +1,5 @@
 # Deploys a preview of each pull request to
-# https://weitzman.github.io/splitopen/pr-preview/pr-<number>/
+# https://www.splitopen.fm/pr-preview/pr-<number>/
 # and posts the link as a sticky PR comment. The preview is removed when
 # the PR closes. Previews live under pr-preview/ on the gh-pages branch,
 # which deploy.yml keeps in sync with main.
@@ -47,3 +47,5 @@ jobs:
           source-dir: .
           preview-branch: gh-pages
           umbrella-dir: pr-preview
+          # The sticky comment links here; left out, the action guesses the github.io address.
+          pages-base-url: www.splitopen.fm
