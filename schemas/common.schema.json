@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://www.splitopen.fm/schemas/common.schema.json",
+  "$id": "https://www.splitopen.org/schemas/common.schema.json",
   "title": "Split Open shared definitions",
   "description": "Definitions the songs, bands and guide schemas share. The stem list here is the one the player has slots for; scripts/schema.py reads it, so a new stem is added here and in app.js.",
   "$defs": {

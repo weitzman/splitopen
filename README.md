@@ -1,6 +1,6 @@
 # Introduction
 
-Our favorite songs, [Split Open](https://www.splitopen.fm) so we can learn and appreciate. Solo the keys during a particularly pretty passage, or mute the guitar so you can play that part. My dream for this project is for bands to take my code (its freely available) and offer this player as a service to their fans. I'm available to help. My email is weitzman@tejasa.com.
+Our favorite songs, [Split Open](https://www.splitopen.org) so we can learn and appreciate. Solo the keys during a particularly pretty passage, or mute the guitar so you can play that part. My dream for this project is for bands to take my code (its freely available) and offer this player as a service to their fans. I'm available to help. My email is weitzman@tejasa.com.
 
 # Technology
 
@@ -35,9 +35,9 @@ channel with mute, solo, and a fader, playing in sync.
   Mega model (see the script for how to run it)
 - `schemas/` — JSON Schemas (draft 2020-12) for the YAML files, published
   with the site:
-  [songs.schema.json](https://www.splitopen.fm/schemas/songs.schema.json),
-  [bands.schema.json](https://www.splitopen.fm/schemas/bands.schema.json) and
-  [guide.schema.json](https://www.splitopen.fm/schemas/guide.schema.json),
+  [songs.schema.json](https://www.splitopen.org/schemas/songs.schema.json),
+  [bands.schema.json](https://www.splitopen.org/schemas/bands.schema.json) and
+  [guide.schema.json](https://www.splitopen.org/schemas/guide.schema.json),
   sharing `common.schema.json` (the stem list and the common string kinds).
   The check scripts apply the same schemas through `scripts/schema.py`.
 - `scripts/check-songs.py` — checks `songs.yaml` and `bands.yaml` strictly,
@@ -66,7 +66,7 @@ it with the current position.
 
 The site is static on GitHub Pages; the stems are not in the repo. They
 live in a Cloudflare R2 bucket (`splitopen`, under `songs/<id>/`) served
-at `https://stems.splitopen.fm` (each song's `dir`), the bucket's custom
+at `https://stems.splitopen.org` (each song's `dir`), the bucket's custom
 domain, which puts the files behind Cloudflare's cache; the bucket's r2.dev
 URL is rate-limited and is not used. The bucket has a CORS policy that
 allows any origin to GET and exposes `Content-Length` (the loading bar
@@ -96,7 +96,7 @@ To offer a guide to the library, press **Contribute** on a guide you wrote
 (or one that reached you by link). A sheet asks for the title, your name,
 an optional link for it and the notes' language, shows the text as it will
 be submitted, and **Email it** opens the mail app with the guide addressed
-to contribute@splitopen.fm, along with the song, the file it would become
+to contribute@splitopen.org, along with the song, the file it would become
 (`guides/<song id>/<slug>.yaml`) and its link; the maintainer adds the file.
 
 Run locally with `python3 scripts/serve.py` (a static server that turns
