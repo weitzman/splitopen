@@ -1,0 +1,69 @@
+# yaml-language-server: $schema=schemas/bands.schema.json
+# Who plays which stem for each band. A song in songs.yaml names its band by
+# the key here; see README.md for the fields. An optional short_name stands
+# in for the name where space is tight (the venue line under the title).
+phish:
+  name: Phish
+  channels:
+    guitar: {who: Trey, inst: Guitar}
+    bass: {who: Mike, inst: Bass}
+    keys: {who: Page, inst: Keys}
+    drums: {who: Fish, inst: Drums}
+    vocals: {who: Vocals, inst: Larynx}
+
+widespread-panic:
+  name: Widespread Panic
+  short_name: WSP
+  channels:
+    guitar: {who: JB & Mikey, inst: Guitars}
+    bass: {who: Schools, inst: Bass}
+    keys: {who: JoJo, inst: Keys}
+    drums: {who: Todd & Sunny, inst: Drums/Perc}
+    vocals: {who: Vocals, inst: Larynx}
+
+goose:
+  name: Goose
+  channels:
+    guitar: {who: Rick, inst: Guitar}
+    bass: {who: Trevor, inst: Bass}
+    keys: {who: Peter, inst: Keys}
+    drums: {who: Cotter, inst: Drums}
+    vocals: {who: Vocals, inst: Larynx}
+
+# A string band has no keys or drums, so neither is listed and the player
+# leaves them out. BS-Roformer-SW puts guitar, banjo and mandolin together
+# in the guitar stem, so that channel is the whole band.
+billy-strings:
+  name: Billy Strings
+  channels:
+    guitar: {who: Billy & the band, inst: Guitar/Banjo/Mando}
+    bass: {who: Royal, inst: Bass}
+    vocals: {who: Vocals, inst: Larynx}
+
+# The December 2015 lineup: Tyler and J.J. on two drum kits and a three-piece
+# horn section. BS-Roformer-SW puts the horns and Kofi Burbridge's organ
+# together in its "other" stem (piano gets its own); scripts/split-other.py
+# divides it into horns and keys. When Kofi plays flute in a song, that song
+# adds `flute: {who: Kofi, inst: Flute}` and splits the flute out the same way.
+tedeschi-trucks-band:
+  name: Tedeschi Trucks Band
+  short_name: TTB
+  channels:
+    guitar: {who: Derek & Susan, inst: Guitars}
+    bass: {who: Tim, inst: Bass}
+    keys: {who: Kofi, inst: Keys}
+    drums: {who: Tyler & JJ, inst: Drums}
+    vocals: {who: Vocals, inst: Larynx}
+    horns: {who: Horns, inst: Sax/Trumpet/Bone}
+
+# The 2023 four-piece. The band id is the short form of the name, not the
+# slug add-song.sh would derive, so pass --band "Cosmic Country" there.
+cosmic-country:
+  name: Daniel Donato's Cosmic Country
+  short_name: Cosmic Country
+  channels:
+    guitar: {who: Daniel, inst: Guitar}
+    bass: {who: Mustang McGee, inst: Bass}
+    keys: {who: Sugarlegg, inst: Keys}
+    drums: {who: Noah, inst: Drums}
+    vocals: {who: Vocals, inst: Larynx}

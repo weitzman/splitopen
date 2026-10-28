@@ -1,0 +1,71 @@
+# yaml-language-server: $schema=schemas/songs.schema.json
+# The songs in the player, in picker order; see README.md for the fields.
+# scripts/add-song.sh appends an entry after encoding and uploading the stems.
+- id: 1998-07-26-funky-bitch
+  band: phish
+  title: Funky Bitch
+  date: 1998-07-26
+  set: Set I
+  venue: Coca-Cola Starplex
+  city: Dallas, TX
+  source: https://archive.org/details/phish_1998-07-26_SBD_RM26
+  dir: https://stems.splitopen.org/songs/1998-07-26-funky-bitch/
+
+- id: 1993-03-22-mikes-song
+  band: phish
+  title: Mike's Song
+  date: 1993-03-22
+  set: Set II
+  venue: Crest Theater
+  city: Sacramento, CA
+  source: https://archive.org/details/phish1993-03-22.001399.sacramento.sbd.flac1644
+  dir: https://stems.splitopen.org/songs/1993-03-22-mikes-song/
+
+- id: 1997-03-29-wonderin
+  band: widespread-panic
+  title: Wonderin'
+  date: 1997-03-29
+  set: Set I
+  venue: Warfield Theater
+  city: San Francisco, CA
+  source: https://archive.org/details/wsp1997-03-29.sbd.flac16
+  dir: https://stems.splitopen.org/songs/1997-03-29-wonderin/
+
+- id: 2025-10-04-thatch
+  band: goose
+  title: Thatch
+  date: 2025-10-04
+  set: Set II
+  venue: The Mann
+  city: Philadelphia, PA
+  source: https://www.youtube.com/watch?v=Qg6W8F10RrY&t=8566s
+  dir: https://stems.splitopen.org/songs/2025-10-04-thatch/
+
+- id: 2017-08-29-meet-me-at-the-creek
+  band: billy-strings
+  title: Meet Me at the Creek
+  date: 2017-08-29
+  venue: The Saint
+  city: Asbury Park, NJ
+  source: https://archive.org/details/billystrings2017-08-29.gondos.sbd.flac16
+  dir: https://stems.splitopen.org/songs/2017-08-29-meet-me-at-the-creek/
+  hidden: true  # the string band comes out as one stem; see bands.yaml
+
+- id: 2015-12-03-midnight-in-harlem
+  band: tedeschi-trucks-band
+  title: Midnight in Harlem
+  date: 2015-12-03
+  set: Set II
+  venue: Capitol Theatre
+  city: Port Chester, NY
+  source: https://archive.org/details/ttb2015-12-03
+  dir: https://stems.splitopen.org/songs/2015-12-03-midnight-in-harlem/  # 3:02 to 10:55 of the track
+
+- id: 2023-07-05-dance-in-the-desert
+  band: cosmic-country
+  title: Dance in the Desert
+  date: 2023-07-05
+  venue: Felton Music Hall
+  city: Felton, CA
+  source: https://archive.org/details/danieldonato2023-07-05
+  dir: https://stems.splitopen.org/songs/2023-07-05-dance-in-the-desert/  # 2:00.6 to 18:44 of the track, after Tumbling Tumbleweeds

@@ -1,0 +1,103 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://www.splitopen.org/schemas/guide.schema.json",
+  "title": "Split Open listening guide",
+  "description": "A guide, guides/<song id>/<slug>.yaml: a listening tour of a song as an ordered list of tips, each a passage, a mix and a note. See the Guides section of README.md. Beyond this schema, scripts/guides-index.py checks that a tip's end is after its start and that no player is both soloed and muted.",
+  "type": "object",
+  "required": [
+    "title",
+    "tips"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "title": {
+      "description": "The guide's title, shown on its chip under the song.",
+      "$ref": "common.schema.json#/$defs/text"
+    },
+    "lang": {
+      "description": "The language of the notes, as a code like en or fr (or pt-BR).",
+      "type": "string",
+      "pattern": "^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})?$",
+      "examples": [
+        "en",
+        "fr",
+        "pt-BR"
+      ]
+    },
+    "by": {
+      "description": "The author's name, shown after the title.",
+      "type": "string"
+    },
+    "url": {
+      "description": "A link for the author's name.",
+      "$ref": "common.schema.json#/$defs/url"
+    },
+    "tips": {
+      "description": "The tips in playing order. A later tip may start before the one before it ends, which replays the passage.",
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/tip"
+      }
+    }
+  },
+  "$defs": {
+    "players": {
+      "description": "A player or a list of players.",
+      "anyOf": [
+        {
+          "$ref": "common.schema.json#/$defs/stem"
+        },
+        {
+          "type": "array",
+          "items": {
+            "$ref": "common.schema.json#/$defs/stem"
+          }
+        }
+      ]
+    },
+    "tip": {
+      "type": "object",
+      "required": [
+        "at"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "at": {
+          "description": "Where the tip begins.",
+          "$ref": "common.schema.json#/$defs/clock"
+        },
+        "to": {
+          "description": "Where it ends; without it, at the next tip.",
+          "$ref": "common.schema.json#/$defs/clock"
+        },
+        "solo": {
+          "description": "The players to solo for the passage.",
+          "$ref": "#/$defs/players"
+        },
+        "mute": {
+          "description": "The players to mute for the passage.",
+          "$ref": "#/$defs/players"
+        },
+        "gain": {
+          "description": "Fader levels for the passage, by player.",
+          "type": "object",
+          "propertyNames": {
+            "$ref": "common.schema.json#/$defs/stem"
+          },
+          "additionalProperties": {
+            "$ref": "common.schema.json#/$defs/gain"
+          }
+        },
+        "pause": {
+          "description": "true stops the music at the tip until the listener presses Continue.",
+          "type": "boolean"
+        },
+        "note": {
+          "description": "What to listen for. Quote it if it holds a colon followed by a space, or a #.",
+          "type": "string"
+        }
+      }
+    }
+  }
+}
