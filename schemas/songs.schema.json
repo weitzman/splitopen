@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://www.splitopen.fm/schemas/songs.schema.json",
+  "$id": "https://www.splitopen.org/schemas/songs.schema.json",
   "title": "Split Open songs",
   "description": "songs.yaml: the songs in the player, in picker order. See README.md. The checks scripts/check-songs.py adds beyond this schema: the id is unique, the band is in bands.yaml, the date is a real date, dir ends with /<id>/ and holds meta.json and every segment of the song's stems.",
   "type": "array",
@@ -61,7 +61,7 @@
           "type": "string",
           "pattern": "^(?:https?://\\S+|audio/songs/[\\w-]+)/$",
           "examples": [
-            "https://stems.splitopen.fm/songs/1998-07-26-funky-bitch/",
+            "https://stems.splitopen.org/songs/1998-07-26-funky-bitch/",
             "audio/songs/1998-07-26-funky-bitch/"
           ]
         },
