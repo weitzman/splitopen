@@ -339,6 +339,16 @@ function teardownChannels() {
   duration = 0;
 }
 
+// Mute and Solo exclude each other for a player, as on the mix sheet: while
+// anything is soloed, solo decides who is heard, so a soloed player's Mute
+// has to drop its solo to silence it.
+function toggleMix(c, key) {
+  c[key] = !c[key];
+  if (c[key]) c[key === 'solo' ? 'mute' : 'solo'] = false;
+  noteMixUsed();
+  applyMuteSolo();
+}
+
 function applyMuteSolo() {
   const anySolo = channels.some(c => c.solo);
   for (const c of channels) {
@@ -500,8 +510,8 @@ function writePosition() {
 // does not retire the solo hint the way noteMixUsed() would.
 function applyMixState(state) {
   for (const c of channels) {
-    c.solo = state.solo.includes(c.def.id);
     c.mute = state.mute.includes(c.def.id);
+    c.solo = !c.mute && state.solo.includes(c.def.id); // a link naming both: the mute wins
     const g = state.gains[c.def.id] ?? 1;
     c.ui.fader.value = g;
     c.fader.gain.setTargetAtTime(g, ctx.currentTime, 0.01);
@@ -1231,8 +1241,8 @@ function guideResume() {
 
 function setMix(mix) {
   for (const c of channels) {
-    c.solo = mix.solo.includes(c.def.id);
     c.mute = mix.mute.includes(c.def.id);
+    c.solo = !c.mute && mix.solo.includes(c.def.id);
     const g = mix.gains[c.def.id] ?? 1;
     c.ui.fader.value = g;
     c.fader.gain.setTargetAtTime(g, ctx.currentTime, 0.01);
@@ -2126,8 +2136,8 @@ function buildStrip(c, index) {
     c.fader.gain.setTargetAtTime(Number(fader.value), ctx.currentTime, 0.01);
   });
   fader.addEventListener('change', writeHash);
-  mute.addEventListener('click', () => { c.mute = !c.mute; noteMixUsed(); applyMuteSolo(); });
-  solo.addEventListener('click', () => { c.solo = !c.solo; noteMixUsed(); applyMuteSolo(); });
+  mute.addEventListener('click', () => toggleMix(c, 'mute'));
+  solo.addEventListener('click', () => toggleMix(c, 'solo'));
 
   c.ui = { strip, mute, solo, meter, fader };
   return strip;
@@ -2190,9 +2200,7 @@ function wireTransport() {
     const n = Number(e.code.replace('Digit', ''));
     if (e.code.startsWith('Digit') && n >= 1 && n <= channels.length) {
       const c = channels[n - 1];
-      if (e.shiftKey) c.mute = !c.mute; else c.solo = !c.solo;
-      noteMixUsed();
-      applyMuteSolo();
+      toggleMix(c, e.shiftKey ? 'mute' : 'solo');
     }
   });
 }
