@@ -773,8 +773,53 @@ li.looping .icon.loop { background: var(--gold); border-color: var(--gold); colo
 @keyframes buffering { 50% { opacity: 0.4; } }
 
 .time { font-variant-numeric: tabular-nums; color: var(--muted); font-size: 14px; min-width: 44px; text-align: center; }
-.seek-wrap { flex: 1; min-width: 0; position: relative; display: flex; align-items: center; }
-.seek { flex: 1; min-width: 0; accent-color: var(--gold); cursor: pointer; }
+.seek-wrap { flex: 1; min-width: 0; position: relative; display: flex; align-items: center; height: 44px; }
+/* The seek bar is a range input with a transparent track over a canvas that
+   draws the track, the played part and the song's levels (see drawShape in
+   app.js). The canvas is inset by half the thumb, like the marks, so the
+   thumb's center lands on the playhead. */
+.seek-shape {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  top: 0;
+  width: calc(100% - 16px);
+  height: 100%;
+  pointer-events: none;
+}
+.seek {
+  -webkit-appearance: none;
+  appearance: none;
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  margin: 0;
+  background: transparent;
+  cursor: pointer;
+}
+.seek::-webkit-slider-runnable-track { height: 100%; background: transparent; border: none; }
+.seek::-moz-range-track { height: 100%; background: transparent; border: none; }
+.seek::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 16px;
+  height: 16px;
+  margin-top: 14px; /* (44 - 16) / 2: WebKit puts the thumb at the track's top */
+  border: none;
+  border-radius: 50%;
+  background: var(--gold);
+  box-shadow: 0 0 0 3px rgba(11, 16, 38, 0.85), 0 0 10px rgba(242, 177, 52, 0.5);
+}
+.seek::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border: none;
+  border-radius: 50%;
+  background: var(--gold);
+  box-shadow: 0 0 0 3px rgba(11, 16, 38, 0.85), 0 0 10px rgba(242, 177, 52, 0.5);
+}
+.seek:focus { outline: none; }
+.seek:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; border-radius: 6px; }
 /* Guide tips are marked over the seek bar: a span for the passage (a tick
    when it runs to the next tip). The marks are decoration only; every
    pointer goes to the seek bar beneath, so it can be dragged anywhere. The

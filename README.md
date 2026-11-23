@@ -15,7 +15,10 @@ channel with mute, solo, and a fader, playing in sync.
   the bucket, see Hosting) holds the song's stems (any of guitar, bass, keys,
   drums, vocals, horns, flute), each a directory of 10-second Opus segments
   (128 kbps, Ogg container), plus a `meta.json` with the song's length and
-  the segment grid. The player decodes a few segments ahead of the playhead
+  the segment grid and a `levels.json` with each stem's level every 100 ms.
+  The seek bar draws from the levels: a faint trace of the mix, or, with
+  players soloed, where they play, in the soloed player's color. The meters
+  read them too while paused or while the seek bar is dragged. The player decodes a few segments ahead of the playhead
   and keeps decoded audio within a memory budget, so a song starts in under
   a second.
 - A song in `songs.yaml` names its band, whose lineup comes from `bands.yaml`
@@ -29,6 +32,10 @@ channel with mute, solo, and a fader, playing in sync.
   segments into a song directory under `audio/songs/<id>/`, the gitignored
   local copy that `upload-stems.sh` syncs; `scripts/seam-test.py` decodes a stem's
   segments the way the player plays them and checks the joins are seamless
+- `scripts/stem-levels.py` — measure a song's `levels.json` from its segments;
+  `segment-stems.py` runs it on each song it encodes. For songs already in
+  the bucket, `scripts/stem-levels.py --all` reads them from their `dir` and
+  `scripts/upload-stems.sh --levels` uploads only the levels files
 - `scripts/split-other.py` — divide BS-Roformer-SW's `other` stem, which
   holds every wind instrument and (for some bands) the organ, between
   `horns`, `keys` and `flute`, guided by the stems of ZFTurbo's 53-stem MVSep
@@ -79,7 +86,8 @@ can read and write the bucket:
       endpoint=https://<account id>.r2.cloudflarestorage.com no_check_bucket=true
 
 `scripts/upload-stems.sh` syncs every song (or one by id) with a year-long
-immutable cache header on segments and an hour on `meta.json`.
+immutable cache header on segments and an hour on `meta.json` and
+`levels.json`; `--levels` copies only the levels files and deletes nothing.
 
 ## Guides
 

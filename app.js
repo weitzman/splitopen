@@ -333,6 +333,8 @@ function teardownChannels() {
   for (const c of channels) c.analyser.disconnect();
   channels = [];
   meta = null;
+  levels = null;
+  shapeDirty();
   playing = false;
   buffering = false;
   offset = 0;
@@ -358,6 +360,7 @@ function applyMuteSolo() {
     c.ui.mute.classList.toggle('on', c.mute);
     c.ui.solo.classList.toggle('on', c.solo);
   }
+  shapeDirty();
   updateHints();
   writeHash();
 }
@@ -516,6 +519,7 @@ function applyMixState(state) {
     c.ui.fader.value = g;
     c.fader.gain.setTargetAtTime(g, ctx.currentTime, 0.01);
   }
+  shapeDirty();
   if (state.t !== null) {
     seek(state.t);
     hashPos = offset;
@@ -2100,6 +2104,174 @@ function wireDrag(handle, li) {
   });
 }
 
+// ---------- levels: the seek bar and the paused meters ----------
+//
+// A song's levels.json (scripts/stem-levels.py) holds each stem's RMS level
+// every 100 ms, one byte each: 0 is silence, 1..255 run from `floor` dB up
+// to 0 dB. The seek bar draws from it, and so do the meters while the song
+// is paused or the seek bar is being dragged, when no audio flows to the
+// analysers. A song without the file gets a plain seek bar and still meters.
+
+let levels = null; // { hz, stems: [{ db, pow } | null] in channel order }
+
+async function loadLevels(s, token) {
+  try {
+    const res = await fetch(s.dir + 'levels.json');
+    if (!res.ok) return;
+    const data = await res.json();
+    if (token !== loadToken) return;
+    const floor = data.floor;
+    levels = {
+      hz: data.hz,
+      stems: STEMS.map(def => {
+        const b64 = data.stems[def.id];
+        if (!b64) return null;
+        const bin = atob(b64);
+        const db = new Float32Array(bin.length), pow = new Float32Array(bin.length);
+        for (let i = 0; i < bin.length; i++) {
+          const v = bin.charCodeAt(i);
+          db[i] = v ? floor - floor * v / 255 : -Infinity;
+          pow[i] = v ? Math.pow(10, db[i] / 10) : 0;
+        }
+        return { db, pow };
+      }),
+    };
+    shapeDirty();
+  } catch (err) {
+    console.warn('no levels for', s.id, err);
+  }
+}
+
+function isAudible(c) {
+  return channels.some(x => x.solo) ? c.solo : !c.mute;
+}
+
+// A channel's level in dB at time t, after its fader and mute, or -Infinity.
+function levelAt(i, t) {
+  const c = channels[i], st = levels && levels.stems[i];
+  if (!st || !isAudible(c)) return -Infinity;
+  const g = Number(c.ui.fader.value);
+  if (!(g > 0)) return -Infinity;
+  const f = Math.min(st.db.length - 1, Math.max(0, Math.floor(t * levels.hz)));
+  return st.db[f] + 20 * Math.log10(g);
+}
+
+// The seek bar's shape. With nothing soloed it is a faint trace of what is
+// audible; with players soloed it is their part, in the soloed player's
+// color (gold for two or more), bright up to the playhead and dimmer after.
+// Each shape is scaled to itself, so a quiet part fills the bar as well as a
+// loud one. A dense band barely varies in loudness, which is why the full
+// mix is only a trace. The columns are worked out again only when the mix,
+// the levels or the bar's width change; between those, a frame redraws only
+// when the playhead has moved a pixel.
+
+const shape = { dirty: true, cols: 0, h: null, color: '', px: -1 };
+
+function shapeDirty() { shape.dirty = true; }
+
+// Mean power over each column's frames, summed over the channels picked,
+// each weighted by its fader.
+function columnHeights(n, pick) {
+  const frames = levels.stems.reduce((m, st) => Math.max(m, st ? st.pow.length : 0), 0);
+  const p = new Float32Array(n);
+  channels.forEach((c, i) => {
+    const st = levels.stems[i];
+    if (!st || !pick(c)) return;
+    const g = Number(c.ui.fader.value);
+    const w = g * g;
+    if (!w) return;
+    for (let k = 0; k < n; k++) {
+      const a = Math.floor(k / n * frames), b = Math.max(a + 1, Math.floor((k + 1) / n * frames));
+      let sum = 0;
+      for (let f = a; f < b && f < st.pow.length; f++) sum += st.pow[f];
+      p[k] += sum / (b - a) * w;
+    }
+  });
+  // Scale: the loudest 1% at the top, the quietest 2% a little above the floor.
+  const dbs = [];
+  for (const v of p) if (v > 0) dbs.push(10 * Math.log10(v));
+  const h = new Float32Array(n);
+  if (!dbs.length) return h;
+  dbs.sort((x, y) => x - y);
+  const q = f => dbs[Math.min(dbs.length - 1, Math.floor(f * dbs.length))];
+  const top = q(0.99), range = Math.max(6, (top - q(0.02)) * 1.15);
+  for (let k = 0; k < n; k++) {
+    if (p[k] > 0) h[k] = Math.max(0, Math.min(1, (10 * Math.log10(p[k]) - top + range) / range));
+  }
+  return h;
+}
+
+function cssColor(el, name) {
+  return getComputedStyle(el).getPropertyValue(name).trim();
+}
+
+function drawShape(pos) {
+  const canvas = ui.shape;
+  const w = canvas.clientWidth, hgt = canvas.clientHeight;
+  if (!w || !hgt) return;
+  const dpr = window.devicePixelRatio || 1;
+  const px = duration ? Math.round(pos / duration * w * dpr) / dpr : 0;
+  if (!shape.dirty && px === shape.px) return;
+  shape.px = px;
+  if (canvas.width !== Math.round(w * dpr) || canvas.height !== Math.round(hgt * dpr)) {
+    canvas.width = Math.round(w * dpr);
+    canvas.height = Math.round(hgt * dpr);
+    shape.dirty = true;
+  }
+  const gold = cssColor(document.documentElement, '--gold');
+  if (shape.dirty) {
+    shape.dirty = false;
+    shape.h = null;
+    if (levels && channels.length) {
+      const n = Math.max(40, Math.round(w / 2));
+      const solos = channels.filter(c => c.solo);
+      shape.spot = solos.length > 0;
+      shape.h = columnHeights(n, solos.length ? c => c.solo : isAudible);
+      shape.color = solos.length === 1 ? cssColor(solos[0].ui.strip, '--c') : gold;
+    }
+  }
+
+  const g = canvas.getContext('2d');
+  g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  g.clearRect(0, 0, w, hgt);
+  const mid = hgt / 2;
+  g.fillStyle = 'rgba(255, 255, 255, 0.1)';
+  g.fillRect(0, mid - 1, w, 2);
+
+  const h = shape.h;
+  const path = scale => {
+    const n = h.length, half = (hgt / 2 - 1) * scale;
+    g.beginPath();
+    g.moveTo(0, mid);
+    for (let k = 0; k < n; k++) g.lineTo((k + 0.5) / n * w, mid - Math.max(0.5, h[k] * half));
+    g.lineTo(w, mid);
+    for (let k = n - 1; k >= 0; k--) g.lineTo((k + 0.5) / n * w, mid + Math.max(0.5, h[k] * half));
+    g.closePath();
+  };
+  if (h && shape.spot) {
+    path(1);
+    g.fillStyle = shape.color;
+    g.globalAlpha = 0.4;
+    g.fill();
+    g.globalAlpha = 1;
+    g.save();
+    g.beginPath();
+    g.rect(0, 0, px, hgt);
+    g.clip();
+    path(1);
+    g.fill();
+    g.restore();
+  } else {
+    if (h) {
+      path(0.55);
+      g.fillStyle = 'rgba(244, 239, 230, 0.13)';
+      g.fill();
+    }
+    g.fillStyle = gold;
+    g.fillRect(0, mid - 1, px, 2);
+  }
+}
+
 // ---------- UI ----------
 
 const ui = {};
@@ -2134,6 +2306,7 @@ function buildStrip(c, index) {
 
   fader.addEventListener('input', () => {
     c.fader.gain.setTargetAtTime(Number(fader.value), ctx.currentTime, 0.01);
+    shapeDirty();
   });
   fader.addEventListener('change', writeHash);
   mute.addEventListener('click', () => toggleMix(c, 'mute'));
@@ -2148,8 +2321,23 @@ function tick() {
   if (channels.length) {
     const pos = position();
     if (!ui.seeking) ui.seek.value = Math.round(pos / duration * 1000);
-    ui.cur.textContent = fmt(pos);
     guideTick(pos);
+    // While dragging, the time, the bar and the meters follow the thumb.
+    const shown = ui.seeking ? ui.seek.value / 1000 * duration : pos;
+    ui.cur.textContent = fmt(shown);
+    drawShape(shown);
+
+    // Paused, buffering or dragging: no audio reaches the analysers, so the
+    // meters read the levels file at the playhead instead.
+    if (levels && (!playing || ui.seeking)) {
+      channels.forEach((c, i) => {
+        const db = levelAt(i, shown);
+        const pct = Math.max(0, Math.min(100, (db + 40) / 40 * 100));
+        c.ui.meter.style.setProperty('--lvl', pct.toFixed(1) + '%');
+      });
+      requestAnimationFrame(tick);
+      return;
+    }
 
     for (const c of channels) {
       c.analyser.getByteTimeDomainData(meterBuf);
@@ -2171,6 +2359,8 @@ function tick() {
 function wireTransport() {
   ui.play = document.getElementById('play');
   ui.seek = document.getElementById('seek');
+  ui.shape = document.getElementById('seek-shape');
+  new ResizeObserver(shapeDirty).observe(ui.shape);
   ui.cur = document.getElementById('time-cur');
   ui.dur = document.getElementById('time-dur');
   ui.share = document.getElementById('share');
@@ -2443,6 +2633,7 @@ async function loadSong(state) {
     if (token !== loadToken) return; // user switched songs mid-load
     meta = m;
     duration = meta.duration;
+    loadLevels(song, token);
     // Only the segment under the playhead has to arrive before the mixer shows.
     const k0 = segIndex(state.t || 0);
     await loadFirstSegment(k0);
