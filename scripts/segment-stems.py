@@ -15,6 +15,9 @@ settle, and the resampler and encoder smear the first and last few samples
 of whatever they are given. Decoded and lined up on the grid, the segments
 are then continuous to within codec noise; scripts/seam-test.py checks that.
 
+<out>/levels.json holds each stem's level every 100 ms, which the seek bar
+and the paused meters draw from; see stem-levels.py, which writes it.
+
 <out>/meta.json records the duration and the grid for the player and for
 check-songs.py:
 
@@ -129,6 +132,10 @@ def main():
         json.dump(meta, f)
         f.write('\n')
     print(f'wrote {len(jobs)} segments and meta.json to {args.out}')
+    # The levels the seek bar and the paused meters draw, measured from the
+    # segments just written (see stem-levels.py).
+    subprocess.run([sys.executable, os.path.join(os.path.dirname(os.path.abspath(__file__)), 'stem-levels.py'), args.out],
+                   check=True)
 
 
 if __name__ == '__main__':
