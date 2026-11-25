@@ -19,7 +19,12 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 REMOTE="${R2_REMOTE:-r2:splitopen/songs}"
-command -v rclone >/dev/null || { echo "missing: rclone (brew install rclone)" >&2; exit 1; }
+# Without rclone (a cloud session, say), upload through Cloudflare's API
+# instead; see r2-upload.py, which adds and replaces files but never deletes.
+if ! command -v rclone >/dev/null; then
+  echo "rclone not found; uploading through the Cloudflare API (scripts/r2-upload.py)" >&2
+  exec python3 "$ROOT/scripts/r2-upload.py" "$@"
+fi
 
 src="$ROOT/audio/songs"; dest="$REMOTE"
 
