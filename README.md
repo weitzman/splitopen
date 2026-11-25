@@ -88,6 +88,11 @@ can read and write the bucket:
 `scripts/upload-stems.sh` syncs every song (or one by id) with a year-long
 immutable cache header on segments and an hour on `meta.json` and
 `levels.json`; `--levels` copies only the levels files and deletes nothing.
+Where rclone is not installed (a cloud session), it uploads through
+Cloudflare's API instead (`scripts/r2-upload.py`), with the same headers,
+using a Cloudflare API token with Workers R2 Storage Edit
+(`CLOUDFLARE_API_TOKEN`, or a network secret for `api.cloudflare.com` in a
+cloud environment). That path adds and replaces files but never deletes.
 
 ## Guides
 
