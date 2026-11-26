@@ -97,7 +97,7 @@ cloud environment). That path adds and replaces files but never deletes.
 ## Guides
 
 Guides is an experimental feature which is not yet shown by default. Append `?guide=1` to the query string to show the **Guides** row under the song title. A guide is a listening tour of a song: an ordered list of tips, each a
-passage, a mix, and a description..
+passage, a mix, and a description.
 
 To write one, press **+ New guide** under the song title, play the song, set mute/solo, and press `N` (or
 **Tip: Start**) where a passage worth a tip begins. The tip takes that
@@ -107,7 +107,7 @@ tip alone, with its start, optional end and description.
 
 To offer a guide to the library, press **Contribute** on a guide you wrote
 (or one that reached you by link). A sheet asks for the title, your name,
-an optional link for it and the notes' language, shows the text as it will
+an optional link for it and the descriptions' language, shows the text as it will
 be submitted, and **Email it** opens the mail app with the guide addressed
 to contribute@splitopen.org, along with the song, the file it would become
 (`guides/<song id>/<slug>.yaml`) and its link; the maintainer adds the file.
