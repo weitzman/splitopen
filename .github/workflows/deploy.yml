@@ -27,6 +27,14 @@ jobs:
       - name: Index the guides
         run: python3 scripts/guides-index.py
 
+      # Version the page's own CSS and scripts by commit, so a browser that
+      # cached them before this deploy fetches them anew instead of pairing
+      # new markup with old code. Before the song pages, which copy index.html.
+      - name: Version the stylesheet and scripts
+        run: |
+          sed -i -E "s#(href=\"styles\.css|src=\"app\.js|src=\"vendor/js-yaml\.min\.js)\"#\1?v=${GITHUB_SHA::12}\"#" index.html
+          test "$(grep -c "?v=${GITHUB_SHA::12}\"" index.html)" -eq 3
+
       - name: Write the song pages, which carry each song's link preview
         run: python3 scripts/song-pages.py
 
