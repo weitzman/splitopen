@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://www.splitopen.org/schemas/bands.schema.json",
+  "title": "Split Open bands",
+  "description": "bands.yaml: who plays which stem for each band, keyed by the band slug a song names in songs.yaml. See README.md.",
+  "type": "object",
+  "propertyNames": {
+    "$ref": "common.schema.json#/$defs/slug"
+  },
+  "additionalProperties": {
+    "$ref": "#/$defs/band"
+  },
+  "$defs": {
+    "band": {
+      "type": "object",
+      "required": [
+        "name",
+        "channels"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "description": "The band's name, shown in the venue line under the song title.",
+          "$ref": "common.schema.json#/$defs/text"
+        },
+        "short_name": {
+          "description": "Stands in for the name where space is tight (TTB, WSP).",
+          "$ref": "common.schema.json#/$defs/text"
+        },
+        "channels": {
+          "description": "The stems this band has, each with who plays it and what. A band lists only the stems it has: a string band leaves out keys and drums, a band with a horn section adds horns.",
+          "type": "object",
+          "minProperties": 1,
+          "propertyNames": {
+            "$ref": "common.schema.json#/$defs/stem"
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/channel"
+          }
+        }
+      }
+    },
+    "channel": {
+      "type": "object",
+      "required": [
+        "who",
+        "inst"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "who": {
+          "description": "The player's name, as the fader is labelled.",
+          "$ref": "common.schema.json#/$defs/text"
+        },
+        "inst": {
+          "description": "The instrument, shown under the name.",
+          "$ref": "common.schema.json#/$defs/text"
+        }
+      }
+    }
+  }
+}

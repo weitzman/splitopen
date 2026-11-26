@@ -1,0 +1,15 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "stemmy",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": [
+        "-c",
+        "python3 scripts/serve.py ${PORT:-8765}"
+      ],
+      "port": 8765,
+      "autoPort": true
+    }
+  ]
+}
