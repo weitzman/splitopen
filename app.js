@@ -614,8 +614,15 @@ let noteTimer = null;
 let noteShown = null;   // key of the note on screen, or null
 let noteSwap = null;
 
+// A guide being written has the author's attention: a note that comes due
+// then is skipped, and one on screen when writing starts goes away.
+function notesQuiet() {
+  return !!guide && !!guide.editing;
+}
+
 function showNote(key) {
   clearTimeout(noteSwap);
+  if (key && notesQuiet()) key = null;
   if (!key) {
     noteShown = null;
     ui.notes.classList.remove('on');
@@ -1326,6 +1333,7 @@ function wireMore(descEl, moreBtn) {
 
 function renderGuide() {
   const editing = !!guide.editing;
+  if (editing) showNote(null);
   const tipEditing = editing && tipEdit !== null;
   ui.guide.hidden = false;
   ui.guide.classList.toggle('editing', editing);
