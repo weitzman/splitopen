@@ -342,7 +342,7 @@ h1 {
   }
 }
 
-/* Guide panel: the current note up top, the list of tips beneath. */
+/* Guide panel: the current description up top, the list of tips beneath. */
 .guide[hidden] { display: none; }
 .guide {
   background: var(--panel);
@@ -397,8 +397,8 @@ a.guide-by:hover { color: var(--gold); }
 
 /* Writing a guide. The tip list is one compact line per tip: handle, mix,
    start (and a quiet optional end), then edit / play / delete, with the
-   first line of the note beneath. */
-.edit-row input[type="text"], .times input, .edit-note {
+   first line of the description beneath. */
+.edit-row input[type="text"], .times input, .edit-description {
   min-width: 0;
   padding: 6px 8px;
   border-radius: 8px;
@@ -407,7 +407,7 @@ a.guide-by:hover { color: var(--gold); }
   color: var(--text);
   font: 16px Inter, sans-serif; /* 16px: below that, iOS Safari zooms the page when the field is focused */
 }
-.times input:focus, .edit-note:focus { outline: 1px solid var(--gold); }
+.times input:focus, .edit-description:focus { outline: 1px solid var(--gold); }
 .guide.editing .guide-tips { max-height: 60vh; }
 .icon {
   width: 30px;
@@ -436,7 +436,7 @@ li.looping .icon.loop { background: var(--gold); border-color: var(--gold); colo
   cursor: pointer;
 }
 .mini:hover { background: rgba(255,255,255,0.12); }
-.edit-note { width: 100%; resize: vertical; line-height: 1.4; }
+.edit-description { width: 100%; resize: vertical; line-height: 1.4; }
 .song.chip.new { background: none; border-style: dashed; color: var(--muted); }
 .song.chip.new:hover { color: var(--text); }
 .handle {
@@ -451,7 +451,7 @@ li.looping .icon.loop { background: var(--gold); border-color: var(--gold); colo
 .guide-tips li.dragging { opacity: 0.6; background: rgba(242, 177, 52, 0.12); }
 .guide-tips li.dragging .handle { cursor: grabbing; }
 
-/* Editing one tip: the list and mixer step aside for its times and note. */
+/* Editing one tip: the list and mixer step aside for its times and description. */
 .guide.tip-editing .guide-tips { max-height: none; overflow: visible; }
 .guide-tips li.tip-editor {
   display: flex;
@@ -657,13 +657,13 @@ li.looping .icon.loop { background: var(--gold); border-color: var(--gold); colo
   cursor: pointer;
 }
 .mini:hover { background: rgba(255,255,255,0.12); }
-.edit-note { width: 100%; resize: vertical; line-height: 1.4; }
+.edit-description { width: 100%; resize: vertical; line-height: 1.4; }
 .song.chip.new { background: none; border-style: dashed; color: var(--muted); }
 .song.chip.new:hover { color: var(--text); }
 
-/* Long notes are clamped to a few lines, with a "more" link that shows the
+/* Long descriptions are clamped to a few lines, with a "more" link that shows the
    rest; the link only appears when there is more. */
-.note.clamp {
+.description.clamp {
   display: -webkit-box;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: var(--lines, 2);
@@ -697,12 +697,12 @@ li.looping .icon.loop { background: var(--gold); border-color: var(--gold); colo
   overflow-y: auto;
 }
 /* Tip rows, read or written alike: mix and times on the first line, the
-   note beneath clamped behind "more". Writing adds a handle on the left
+   description beneath clamped behind "more". Writing adds a handle on the left
    and edit / play / delete on the right. */
 .guide-tips li.tip-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  grid-template-areas: "jump" "note" "more";
+  grid-template-areas: "jump" "description" "more";
   align-items: center;
   column-gap: 10px;
   row-gap: 2px;
@@ -713,7 +713,7 @@ li.looping .icon.loop { background: var(--gold); border-color: var(--gold); colo
 }
 .guide-tips li.tip-row.edit {
   grid-template-columns: auto minmax(0, 1fr) auto;
-  grid-template-areas: "handle jump actions" "handle note note" "handle more more";
+  grid-template-areas: "handle jump actions" "handle description description" "handle more more";
 }
 .guide-tips li.tip-row.on { background: rgba(255,255,255,0.05); color: var(--text); }
 .guide-tips li.tip-row .handle { grid-area: handle; }
@@ -737,8 +737,8 @@ li.looping .icon.loop { background: var(--gold); border-color: var(--gold); colo
 .guide-tips li.tip-row .when .to { color: var(--muted); }
 .guide-tips li.tip-row.on .when .at { color: var(--gold); }
 .guide-tips li.tip-row .actions { grid-area: actions; display: inline-flex; gap: 4px; }
-.guide-tips li.tip-row .note { grid-area: note; }
-.guide-tips li.tip-row .note[hidden] { display: none; }
+.guide-tips li.tip-row .description { grid-area: description; }
+.guide-tips li.tip-row .description[hidden] { display: none; }
 .guide-tips li.tip-row .more { grid-area: more; justify-self: start; }
 
 /* Transport */

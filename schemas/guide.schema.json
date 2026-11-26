@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://www.splitopen.org/schemas/guide.schema.json",
   "title": "Split Open listening guide",
-  "description": "A guide, guides/<song id>/<slug>.yaml: a listening tour of a song as an ordered list of tips, each a passage, a mix and a note. See the Guides section of README.md. Beyond this schema, scripts/guides-index.py checks that a tip's end is after its start and that no player is both soloed and muted.",
+  "description": "A guide, guides/<song id>/<slug>.yaml: a listening tour of a song as an ordered list of tips, each a passage, a mix and a description. See the Guides section of README.md. Beyond this schema, scripts/guides-index.py checks that a tip's end is after its start and that no player is both soloed and muted.",
   "type": "object",
   "required": [
     "title",
@@ -15,7 +15,7 @@
       "$ref": "common.schema.json#/$defs/text"
     },
     "lang": {
-      "description": "The language of the notes, as a code like en or fr (or pt-BR).",
+      "description": "The language of the descriptions, as a code like en or fr (or pt-BR).",
       "type": "string",
       "pattern": "^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})?$",
       "examples": [
@@ -93,7 +93,7 @@
           "description": "true stops the music at the tip until the listener presses Continue.",
           "type": "boolean"
         },
-        "note": {
+        "description": {
           "description": "What to listen for. Quote it if it holds a colon followed by a space, or a #.",
           "type": "string"
         }

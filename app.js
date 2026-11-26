@@ -975,8 +975,8 @@ function mediaSessionPosition() {
 // ---------- guides ----------
 //
 // A guide is a listening tour of a song: an ordered list of tips, each a
-// passage, a mix, and a note. The mix holds for the passage; between tips
-// the band plays in full. When the playhead crosses into a tip its note is
+// passage, a mix, and a description. The mix holds for the passage; between tips
+// the band plays in full. When the playhead crosses into a tip its description is
 // shown; a tip marked `pause` also stops the music until the listener
 // presses Continue. The text form is YAML:
 //
@@ -988,26 +988,26 @@ function mediaSessionPosition() {
 //     - at: 0:00
 //       to: 0:30
 //       solo: [drums]
-//       note: Fish alone on drums.
+//       description: Fish alone on drums.
 //     - at: 0:30
 //       to: 1:00
 //       solo: [drums, bass]
 //       pause: true
-//       note: Mike joins. Listen for the push and pull.
+//       description: Mike joins. Listen for the push and pull.
 //
-// The top-level keys are title, lang (the notes' language code, which the
+// The top-level keys are title, lang (the descriptions' language code, which the
 // page passes on to the browser), by and url (the author's name and a link
 // for it) and tips. A tip has at (m:ss), then any of to (where the tip
 // ends; without it, at the next tip), solo and mute (a player or a list of
 // players), gain (a map of player to level, 0 to 1.5), pause (true) and
-// note. A later tip may start earlier than the one before it ends, which is
+// description. A later tip may start earlier than the one before it ends, which is
 // how a passage is replayed. The hash carries a guide as guide=<slug> for
 // one kept in the repo (see guides.json), or guide=z<base64url of the
 // deflated text> for one written in the player or by hand;
 // SplitOpen.guideLink(text) in the console makes such a link.
 
 function emptyTip(at) {
-  return { at, to: null, solo: [], mute: [], gains: {}, pause: false, note: '' };
+  return { at, to: null, solo: [], mute: [], gains: {}, pause: false, description: '' };
 }
 
 function parseClock(s) {
@@ -1048,7 +1048,8 @@ function parseGuideText(text) {
     if ('mute' in t) tip.mute = parseStemList(names(t.mute));
     if (t.gain && typeof t.gain === 'object') tip.gains = gainsFrom(Object.entries(t.gain));
     tip.pause = t.pause === true;
-    tip.note = str(t.note);
+    // Older links say note for description.
+    tip.description = str('description' in t ? t.description : t.note);
     g.tips.push(tip);
   }
   return g;
@@ -1262,7 +1263,7 @@ function leaveTips() {
   renderGuideNow();
 }
 
-// Applies the tip's mix and shows its note. `arrive` means the playhead has
+// Applies the tip's mix and shows its description. `arrive` means the playhead has
 // just reached the tip (as opposed to the guide being opened or the playhead
 // dropped somewhere inside it), which is when a `pause` tip pauses.
 function enterTip(i, arrive, applyMix = guideOwnsMix()) {
@@ -1304,21 +1305,21 @@ function renderMixLabel(el, tip) {
   el.append(stems.length ? ' \u00b7 ' + what : what);
 }
 
-// Fills a note element with text clamped to `lines` lines and shows its
+// Fills a description element with text clamped to `lines` lines and shows its
 // "more" link only when the text actually overflows; the link toggles the
 // full text. Overflow is measured after layout, hence the frame wait.
-function renderNote(noteEl, moreBtn, text, lines) {
-  noteEl.textContent = text;
-  noteEl.style.setProperty('--lines', lines);
-  noteEl.classList.add('clamp');
+function renderDescription(descEl, moreBtn, text, lines) {
+  descEl.textContent = text;
+  descEl.style.setProperty('--lines', lines);
+  descEl.classList.add('clamp');
   moreBtn.hidden = true;
   moreBtn.textContent = 'more';
-  requestAnimationFrame(() => { moreBtn.hidden = noteEl.scrollHeight <= noteEl.clientHeight + 1; });
+  requestAnimationFrame(() => { moreBtn.hidden = descEl.scrollHeight <= descEl.clientHeight + 1; });
 }
 
-function wireMore(noteEl, moreBtn) {
+function wireMore(descEl, moreBtn) {
   moreBtn.addEventListener('click', () => {
-    const clamped = noteEl.classList.toggle('clamp');
+    const clamped = descEl.classList.toggle('clamp');
     moreBtn.textContent = clamped ? 'more' : 'less';
   });
 }
@@ -1330,7 +1331,7 @@ function renderGuide() {
   ui.guide.classList.toggle('editing', editing);
   ui.guide.classList.toggle('tip-editing', tipEditing);
   ui.mixer.hidden = tipEditing; // editing a tip is all about the tip; the mixer makes way
-  ui.guide.lang = guide.lang; // the notes' language, for screen readers and hyphenation
+  ui.guide.lang = guide.lang; // the descriptions' language, for screen readers and hyphenation
   ui.guideKicker.textContent = tipEditing ? 'Editing a tip' : editing ? 'Tips' : 'Guide';
   ui.guideTitle.hidden = editing;
   ui.guideAdd.hidden = !editing || tipEditing;
@@ -1382,7 +1383,7 @@ function goToTip(i) {
   enterTip(i, true, true);
 }
 
-// The current tip is highlighted in the list; long notes stay clamped
+// The current tip is highlighted in the list; long descriptions stay clamped
 // behind "more" until the listener opens them.
 function renderGuideNow() {
   if (!guide) return;
@@ -1489,7 +1490,7 @@ function wireGuide() {
 // A guide is written in the player itself. Start a new one (or edit the open
 // one), play the song, set the mix, and press N (Tip: Start) where a passage
 // worth a tip begins and again (Tip: End) where it ends: the tip takes that
-// passage and the mix in force when it started, and its note is typed in
+// passage and the mix in force when it started, and its description is typed in
 // place. The draft is re-encoded into the hash as it changes, so Share hands
 // it out and a reload brings it back. A draft never pauses at its own
 // `pause` tips.
@@ -1518,11 +1519,11 @@ function guideText(g) {
     const gains = Object.entries(s.gains).filter(([, v]) => v !== 1);
     if (gains.length) t.gain = Object.fromEntries(gains);
     if (s.pause) t.pause = true;
-    const note = s.note.replace(/\s*\n\s*/g, ' ').trim();
-    if (note) t.note = note;
+    const description = s.description.replace(/\s*\n\s*/g, ' ').trim();
+    if (description) t.description = description;
     return t;
   });
-  // Player lists and gain maps inline ([drums, bass]); a note on one line
+  // Player lists and gain maps inline ([drums, bass]); a description on one line
   // however long; no quoting of yes/no, which are only words in YAML 1.2.
   return jsyaml.dump(doc, { schema: jsyaml.CORE_SCHEMA, flowLevel: 3, lineWidth: -1, noCompatMode: true });
 }
@@ -1616,7 +1617,7 @@ const ICON_PLAY = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColo
 const ICON_TRASH = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/></svg>';
 
 // One row per tip, the same whether the guide is being read or written:
-// the mix, the start (and a quiet optional end), and the note clamped
+// the mix, the start (and a quiet optional end), and the description clamped
 // behind "more". Writing adds a drag handle and edit / play / delete.
 // Clicking the mix or times jumps to the tip.
 function buildTipRow(tip, i, editable) {
@@ -1635,18 +1636,18 @@ function buildTipRow(tip, i, editable) {
       <button class="icon loop" title="Play this Tip in a loop" aria-label="Play this Tip in a loop">${ICON_PLAY}</button>
       <button class="icon del" title="Delete this tip" aria-label="Delete this tip">${ICON_TRASH}</button>
     </span>` : ''}
-    <span class="note"></span>
+    <span class="description"></span>
     <button class="more">more</button>`;
   renderMixLabel(li.querySelector('.mix'), tip);
   li.querySelector('.at').textContent = fmt(tip.at);
   li.querySelector('.to').textContent = tip.to === null ? '' : ' \u2013 ' + fmt(tip.to);
-  const note = li.querySelector('.note');
+  const description = li.querySelector('.description');
   const more = li.querySelector('.more');
-  if (tip.note) {
-    renderNote(note, more, tip.note, 2);
-    wireMore(note, more);
+  if (tip.description) {
+    renderDescription(description, more, tip.description, 2);
+    wireMore(description, more);
   } else {
-    note.hidden = true;
+    description.hidden = true;
     more.hidden = true;
   }
   li.querySelector('.jump').addEventListener('click', () => goToTip(i));
@@ -1665,12 +1666,12 @@ function buildTipRow(tip, i, editable) {
 // Editing one tip: the list and the mixer step aside for its times and
 // description. Play loops the passage as currently typed; Save keeps the
 // changes, Discard drops them.
-let tipEdit = null; // { i, at, to, note } while a tip is being edited
+let tipEdit = null; // { i, at, to, description } while a tip is being edited
 
 function editTip(i) {
   const tip = guide.tips[i];
   stopLoop();
-  tipEdit = { i, at: tip.at, to: tip.to, note: tip.note, solo: [...tip.solo], mute: [...tip.mute] };
+  tipEdit = { i, at: tip.at, to: tip.to, description: tip.description, solo: [...tip.solo], mute: [...tip.mute] };
   renderGuide();
 }
 
@@ -1696,7 +1697,7 @@ function buildTipEditor(tip, i) {
       </span>
       <span class="scrub-hint">Scrub or play to a moment, then Set.</span>
     </div>
-    <textarea class="edit-note" rows="5" placeholder="What to listen for here"></textarea>
+    <textarea class="edit-description" rows="5" placeholder="What to listen for here"></textarea>
     <div class="actions">
       <button class="btn save">Save</button>
       <button class="btn loop" title="Play this Tip in a loop">${ICON_PLAY}<span>Play</span></button>
@@ -1709,8 +1710,8 @@ function buildTipEditor(tip, i) {
   const to = li.querySelector('.to');
   const clearTo = li.querySelector('.clear-to');
   const setTo = li.querySelector('.set-to');
-  const note = li.querySelector('textarea');
-  note.value = tipEdit.note;
+  const description = li.querySelector('textarea');
+  description.value = tipEdit.description;
   const showTimes = () => {
     at.textContent = clock(tipEdit.at);
     to.textContent = tipEdit.to === null ? '\u2014' : clock(tipEdit.to);
@@ -1731,9 +1732,9 @@ function buildTipEditor(tip, i) {
     showTimes();
   });
   clearTo.addEventListener('click', () => { tipEdit.to = null; showTimes(); });
-  note.addEventListener('input', () => { tipEdit.note = note.value; });
+  description.addEventListener('input', () => { tipEdit.description = description.value; });
   li.querySelector('.save').addEventListener('click', () => {
-    Object.assign(tip, { at: tipEdit.at, to: tipEdit.to, note: tipEdit.note, solo: tipEdit.solo, mute: tipEdit.mute });
+    Object.assign(tip, { at: tipEdit.at, to: tipEdit.to, description: tipEdit.description, solo: tipEdit.solo, mute: tipEdit.mute });
     tipEdit = null;
     stopLoop();
     tipsChanged();
