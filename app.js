@@ -1334,6 +1334,7 @@ function renderGuide() {
   ui.guideKicker.textContent = tipEditing ? 'Editing a tip' : editing ? 'Tips' : 'Guide';
   ui.guideTitle.hidden = editing;
   ui.guideAdd.hidden = !editing || tipEditing;
+  ui.guideAdd.classList.toggle('hint', editing && !guide.tips.length); // the first step, until it is taken
   ui.guideEdit.hidden = !canEdit();
   ui.guideOffer.hidden = tipEditing || !canOffer();
   ui.guideClose.hidden = tipEditing;
