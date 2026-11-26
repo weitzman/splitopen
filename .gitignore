@@ -10,3 +10,5 @@ audio/songs/
 # the fly locally.
 s/
 404.html
+# Python bytecode from running the scripts.
+__pycache__/
