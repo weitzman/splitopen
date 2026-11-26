@@ -877,18 +877,18 @@ li.looping .icon.loop { background: var(--gold); border-color: var(--gold); colo
   }
 }
 
-/* Tips: one line under the transport, each fading in on its own cue (see
-   the tips section of app.js). Keeps its height while empty so nothing
-   below it jumps when a tip arrives. */
-.tip {
+/* Notes: one line under the transport, each fading in on its own cue (see
+   the notes section of app.js). Keeps its height while empty so nothing
+   below it jumps when a note arrives. */
+.notes {
   min-height: 42px;
   display: flex;
   justify-content: center;
   opacity: 0;
   transition: opacity 0.6s ease;
 }
-.tip.on { opacity: 1; }
-.tip-card {
+.notes.on { opacity: 1; }
+.notes-card {
   display: inline-flex;
   align-items: center;
   gap: 10px;
@@ -900,9 +900,9 @@ li.looping .icon.loop { background: var(--gold); border-color: var(--gold); colo
   font-size: 15px;
   color: var(--text);
 }
-.tip-icon { width: 20px; height: 20px; flex: none; color: var(--gold); }
-.tip em { font-style: normal; font-weight: 600; color: var(--gold); }
-.tip-link {
+.notes-icon { width: 20px; height: 20px; flex: none; color: var(--gold); }
+.notes em { font-style: normal; font-weight: 600; color: var(--gold); }
+.notes-link {
   padding: 0;
   border: none;
   background: none;
@@ -913,26 +913,26 @@ li.looping .icon.loop { background: var(--gold); border-color: var(--gold); colo
   text-underline-offset: 3px;
   cursor: pointer;
 }
-.tip-link:hover { color: var(--text); }
-.tip-link .tip-glyph {
+.notes-link:hover { color: var(--text); }
+.notes-link .notes-glyph {
   width: 14px;
   height: 14px;
   margin-left: 5px;
   vertical-align: -2px;
 }
-/* On phones the transport is fixed to the bottom, so the tip floats just
+/* On phones the transport is fixed to the bottom, so the note floats just
    above it instead of sitting in the flow underneath. */
 @media (max-width: 720px) {
-  .tip {
+  .notes {
     position: fixed;
     left: 16px;
     right: 16px;
     bottom: 102px; /* the transport is 78px tall, 12px up from the bottom */
     z-index: 2;
-    pointer-events: none; /* taps fall through to the page, except on a showing tip */
+    pointer-events: none; /* taps fall through to the page, except on a showing note */
   }
-  .tip.on .tip-card { pointer-events: auto; }
-  .tip-card { font-size: 14px; }
+  .notes.on .notes-card { pointer-events: auto; }
+  .notes-card { font-size: 14px; }
 }
 
 .help {
